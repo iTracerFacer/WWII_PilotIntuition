@@ -18,7 +18,8 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 - **Formation Integrity Monitoring**: Alerts for wingmen presence and formation status.
 - **Dogfight Assistance**: Warnings for merging bandits, tail threats, head-on encounters, and more.
 - **Visual Markers**: Optional smoke or flare markers for spotted targets.
-- **Player Customization**: Configurable settings via in-game F10 menu.
+- **Independent Scanning Toggles**: Separate controls for air and ground target detection, available globally (mission-wide) and per-player.
+- **Player Customization**: Configurable settings via in-game F10 menu, including per-player overrides for scanning preferences.
 - **Environmental Awareness**: Reduced detection ranges at night or in bad weather.
 - **Multiplayer Support**: Works in both single-player and multiplayer environments.
 
@@ -50,8 +51,10 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 ## Usage
 
 ### In-Game Controls
-- **F10 Menu**: Access global settings to toggle features like dogfight assist, markers, and messaging.
-- **Automatic Alerts**: Receive voice-like messages for detected threats, formation changes, and compliments.
+- **F10 Menu**:
+  - **Global Settings**: Mission-wide toggles for active messaging, markers, and scanning (air/ground).
+  - **Per-Player Settings**: Individual controls under "Pilot Intuition" for dogfight assist, markers, and scanning preferences.
+- **Automatic Alerts**: Receive voice-like messages for detected threats, formation changes, and compliments (based on your enabled scans).
 - **On-Demand Summaries**: Request situation summaries via menu options.
 
 ### Gameplay Tips
@@ -59,16 +62,18 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 - **Environmental Factors**: Be aware that night and bad weather reduce spotting distances.
 - **Dogfights**: Use the system for merge warnings and tactical advice.
 - **Ground Attacks**: Get alerts for nearby enemy units and vehicles.
+- **Custom Scanning**: Toggle air or ground scanning on/off via F10 menu to focus on specific threats (e.g., disable ground alerts during air battles).
 
 ## Configuration
 
-The script uses a global configuration table `PILOT_INTUITION_CONFIG` for easy customization. Edit the values in `Moose_WWII_PilotIntuition.lua` before loading the mission.
+The script uses a global configuration table `PILOT_INTUITION_CONFIG` for easy customization. Edit the values in `Moose_WWII_PilotIntuition.lua` before loading the mission. Players can override global settings via the F10 menu for personalized experience.
 
 ### Key Settings
 - **Detection Ranges**: Adjust base ranges for air and ground targets.
 - **Multipliers**: Set environmental factors like night and weather penalties.
 - **Messaging**: Control cooldowns and enable/disable features.
 - **Markers**: Choose marker type and duration.
+- **Scanning Toggles**: Enable/disable air and ground scanning globally (players can override individually).
 - **Dogfight Assist**: Toggle assistance and set thresholds.
 
 For detailed parameter descriptions, refer to the comments in the script.

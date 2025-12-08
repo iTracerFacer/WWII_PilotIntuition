@@ -20,6 +20,7 @@
 -- - Formation integrity monitoring with alerts for wingmen presence.
 -- - Dogfight assistance with alerts for merging bandits, tail warnings, head-on threats, and more.
 -- - Optional visual markers (smoke, flares) for spotted targets.
+-- - Independent toggles for air and ground target scanning, both globally (mission-wide) and per-player.
 -- - Configurable settings via F10 menu for players to customize their experience.
 
 --
@@ -65,6 +66,8 @@ PILOT_INTUITION_CONFIG = {
     complimentRange = 75,  -- Meters for close flying compliment
     headOnWarningRange = 150,  -- Meters for head-on warning
     closeFlyingMessageCooldown = 10,  -- Seconds between close flying messages
+    enableAirScanning = true,  -- Enable scanning for air targets
+    enableGroundScanning = true,  -- Enable scanning for ground targets
 }
 
 -- Message table with variations for different types
@@ -153,6 +156,14 @@ PILOT_INTUITION_MESSAGES = {
         "Active messaging %s.",
         "Live alerts %s.",
     },
+    airScanningToggle = {
+        "Air scanning %s.",
+        "Air detection %s.",
+    },
+    groundScanningToggle = {
+        "Ground scanning %s.",
+        "Ground detection %s.",
+    },
     summaryCooldown = {
         "Summary on cooldown.",
         "Wait a bit for another summary.",
@@ -237,6 +248,8 @@ function PilotIntuition:ScanTargets()
                         hasBeenWelcomed = false,
                         lastComplimentTime = 0,
                         lastHeadOnWarningTime = 0,
+                        enableAirScanning = PILOT_INTUITION_CONFIG.enableAirScanning,
+                        enableGroundScanning = PILOT_INTUITION_CONFIG.enableGroundScanning,
                     }
                 end
             end
@@ -292,8 +305,12 @@ function PilotIntuition:ScanTargets()
             -- Determine enemy lists for this player
             local playerCoal = unit:GetCoalition()
             local enemyCoal = (playerCoal == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
-            self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
-            self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
+            if playerData.enableAirScanning then
+                self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
+            end
+            if playerData.enableGroundScanning then
+                self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
+            end
             self:CheckCloseFlyingForPlayer(unit, playerData, client, activeClients)
         end
     end
@@ -327,6 +344,14 @@ function PilotIntuition:SetupMenu()
     MENU_MISSION_COMMAND:New("Active Messaging On", rootMenu, self.MenuSetActiveMessaging, self, true)
     MENU_MISSION_COMMAND:New("Active Messaging Off", rootMenu, self.MenuSetActiveMessaging, self, false)
 
+    -- Air scanning toggle
+    MENU_MISSION_COMMAND:New("Air Scanning On", rootMenu, self.MenuSetAirScanning, self, true)
+    MENU_MISSION_COMMAND:New("Air Scanning Off", rootMenu, self.MenuSetAirScanning, self, false)
+
+    -- Ground scanning toggle
+    MENU_MISSION_COMMAND:New("Ground Scanning On", rootMenu, self.MenuSetGroundScanning, self, true)
+    MENU_MISSION_COMMAND:New("Ground Scanning Off", rootMenu, self.MenuSetGroundScanning, self, false)
+
     -- Per-player menu group: create a settings node for each active player
     self:SetupPlayerMenus()
 
@@ -349,6 +374,12 @@ function PilotIntuition:SetupPlayerMenus()
                 MENU_GROUP_COMMAND:New(playerGroup, "Marker: Smoke", playerMenu, self.MenuSetPlayerMarker, self, unit, "smoke")
                 MENU_GROUP_COMMAND:New(playerGroup, "Marker: Flare", playerMenu, self.MenuSetPlayerMarker, self, unit, "flare")
                 MENU_GROUP_COMMAND:New(playerGroup, "Marker: None", playerMenu, self.MenuSetPlayerMarker, self, unit, "none")
+                -- Air scanning toggle
+                MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: On", playerMenu, self.MenuSetPlayerAirScanning, self, unit, true)
+                MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: Off", playerMenu, self.MenuSetPlayerAirScanning, self, unit, false)
+                -- Ground scanning toggle
+                MENU_GROUP_COMMAND:New(playerGroup, "Ground Scanning: On", playerMenu, self.MenuSetPlayerGroundScanning, self, unit, true)
+                MENU_GROUP_COMMAND:New(playerGroup, "Ground Scanning: Off", playerMenu, self.MenuSetPlayerGroundScanning, self, unit, false)
                 -- Summary commands
                 MENU_GROUP_COMMAND:New(playerGroup, "Summary: Brief", playerMenu, self.MenuSendPlayerSummary, self, unit, "brief")
                 MENU_GROUP_COMMAND:New(playerGroup, "Summary: Detailed", playerMenu, self.MenuSendPlayerSummary, self, unit, "detailed")
@@ -392,6 +423,34 @@ function PilotIntuition:MenuSetPlayerDogfightAssist(playerUnit, onoff)
     end
 end
 
+function PilotIntuition:MenuSetPlayerAirScanning(playerUnit, onoff)
+    env.info("PilotIntuition: MenuSetPlayerAirScanning called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(onoff))
+    if not playerUnit then return end
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    if self.players[playerName] then
+        self.players[playerName].enableAirScanning = onoff
+        local status = onoff and "enabled" or "disabled"
+        local client = playerUnit:GetClient()
+        if client then
+            MESSAGE:New(self:GetRandomMessage("airScanningToggle", {status}), 10):ToClient(client)
+        end
+    end
+end
+
+function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
+    env.info("PilotIntuition: MenuSetPlayerGroundScanning called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(onoff))
+    if not playerUnit then return end
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    if self.players[playerName] then
+        self.players[playerName].enableGroundScanning = onoff
+        local status = onoff and "enabled" or "disabled"
+        local client = playerUnit:GetClient()
+        if client then
+            MESSAGE:New(self:GetRandomMessage("groundScanningToggle", {status}), 10):ToClient(client)
+        end
+    end
+end
+
 function PilotIntuition:MenuSetActiveMessaging(onoff)
     env.info("PilotIntuition: MenuSetActiveMessaging called with " .. tostring(onoff))
     PILOT_INTUITION_CONFIG.activeMessaging = onoff
@@ -411,6 +470,24 @@ function PilotIntuition:MenuSetActiveMessaging(onoff)
             self.summaryScheduler = SCHEDULER:New(nil, self.SendScheduledSummaries, {self}, 1, PILOT_INTUITION_CONFIG.summaryInterval)
         end
     end
+end
+
+function PilotIntuition:MenuSetAirScanning(onoff)
+    env.info("PilotIntuition: MenuSetAirScanning called with " .. tostring(onoff))
+    PILOT_INTUITION_CONFIG.enableAirScanning = onoff
+    local status = onoff and "enabled" or "disabled"
+    local msg = self:GetRandomMessage("airScanningToggle", {status})
+    env.info("PilotIntuition: Air scanning message: " .. msg)
+    self:BroadcastMessageToAll(msg)
+end
+
+function PilotIntuition:MenuSetGroundScanning(onoff)
+    env.info("PilotIntuition: MenuSetGroundScanning called with " .. tostring(onoff))
+    PILOT_INTUITION_CONFIG.enableGroundScanning = onoff
+    local status = onoff and "enabled" or "disabled"
+    local msg = self:GetRandomMessage("groundScanningToggle", {status})
+    env.info("PilotIntuition: Ground scanning message: " .. msg)
+    self:BroadcastMessageToAll(msg)
 end
 
 function PilotIntuition:MenuSendPlayerSummary(playerUnit, detailLevel)
