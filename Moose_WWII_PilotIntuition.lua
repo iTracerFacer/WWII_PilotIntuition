@@ -15,12 +15,13 @@
 -- ground units, and receive formation feedback. It's particularly useful in multiplayer servers for coordinated flights or solo play for enhanced challenge.
 
 -- Features:
--- - Dynamic detection ranges based on formation flying and environmental conditions (night, weather).
+-- - **Dynamic Detection Ranges**: Detection ranges automatically adjust based on formation flying and environmental conditions. Flying in tight formations with wingmen significantly boosts spotting distances for both air and ground targets. For example, a solo pilot might detect air targets at 5km, but in a 2-ship formation, this increases to 10km, and in a 4-ship formation to 15km. Environmental factors like night reduce ranges (e.g., 50% at night), while bad weather can further decrease visibility. This simulates historical WWII reconnaissance where formation integrity was crucial for situational awareness.
 -- - Realistic messaging simulating pilot radio calls for spotting bandits and ground threats.
 -- - Formation integrity monitoring with alerts for wingmen presence.
 -- - Dogfight assistance with alerts for merging bandits, tail warnings, head-on threats, and more.
--- - Optional visual markers (smoke, flares) for spotted targets.
--- - Independent toggles for air and ground target scanning, both globally (mission-wide) and per-player.
+-- - Optional visual markers (smoke, flares) for spotted targets, with selectable colors.
+-- - Independent toggles for air target scanning, both globally (mission-wide) and per-player.
+-- - On-demand ground target scanning with selective marking: scan nearby targets, review list, and choose which one to mark.
 -- - Configurable settings via F10 menu for players to customize their experience.
 -- - Scheduled summaries for players preferring less frequent updates.
 -- - Per Player customization of dogfight assistance, marker types, and scanning preferences and message frequency.
@@ -38,7 +39,7 @@ PILOT_INTUITION_CONFIG = {
     airDetectionRange = 5000,  -- Meters (base range for air targets) (can be modified by formation and environment)
     groundDetectionRange = 3000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
     messageCooldown = 10,  -- Seconds between messages
-    markerType = "smoke",  -- Options: "smoke", "flare", "none"
+    markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
     markerDuration = 300,  -- Seconds for marker visibility (dcs default can't be changed, so this is just for reference)
     threatHotRange = 1000,  -- Meters for "hot" threat
     threatColdRange = 5000,  -- Meters for "cold" threat
@@ -69,7 +70,6 @@ PILOT_INTUITION_CONFIG = {
     headOnWarningRange = 150,  -- Meters for head-on warning
     closeFlyingMessageCooldown = 10,  -- Seconds between close flying messages
     enableAirScanning = true,  -- Enable scanning for air targets
-    enableGroundScanning = true,  -- Enable scanning for ground targets
 }
 
 -- Message table with variations for different types
@@ -258,7 +258,7 @@ function PilotIntuition:ScanTargets()
                         lastComplimentTime = 0,
                         lastHeadOnWarningTime = 0,
                         enableAirScanning = PILOT_INTUITION_CONFIG.enableAirScanning,
-                        enableGroundScanning = PILOT_INTUITION_CONFIG.enableGroundScanning,
+                        scannedGroundTargets = {},  -- List of recently scanned ground targets for selection
                         cachedWingmen = 0,  -- Cached wingmen count
                         lastWingmenUpdate = 0,
                         previousWingmen = 0,  -- For formation change detection
@@ -340,9 +340,6 @@ function PilotIntuition:ScanTargets()
             if playerData.enableAirScanning then
                 self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
             end
-            if playerData.enableGroundScanning then
-                self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
-            end
             self:CheckCloseFlyingForPlayer(unit, playerData, client, activeClients)
         end
     end
@@ -402,9 +399,17 @@ function PilotIntuition:SetupMenu()
     self.menu = rootMenu
 
     -- Marker type choices
-    MENU_MISSION_COMMAND:New("Marker Smoke", rootMenu, self.MenuSetMarkerType, self, "smoke")
-    MENU_MISSION_COMMAND:New("Marker Flare", rootMenu, self.MenuSetMarkerType, self, "flare")
-    MENU_MISSION_COMMAND:New("Marker None", rootMenu, self.MenuSetMarkerType, self, "none")
+    local markerMenu = MENU_MISSION:New("Marker Type", rootMenu)
+    local smokeMenu = MENU_MISSION:New("Smoke", markerMenu)
+    MENU_MISSION_COMMAND:New("Red", smokeMenu, self.MenuSetMarkerType, self, "smoke_red")
+    MENU_MISSION_COMMAND:New("Green", smokeMenu, self.MenuSetMarkerType, self, "smoke_green")
+    MENU_MISSION_COMMAND:New("Blue", smokeMenu, self.MenuSetMarkerType, self, "smoke_blue")
+    MENU_MISSION_COMMAND:New("White", smokeMenu, self.MenuSetMarkerType, self, "smoke_white")
+    local flareMenu = MENU_MISSION:New("Flare", markerMenu)
+    MENU_MISSION_COMMAND:New("Red", flareMenu, self.MenuSetMarkerType, self, "flare_red")
+    MENU_MISSION_COMMAND:New("Green", flareMenu, self.MenuSetMarkerType, self, "flare_green")
+    MENU_MISSION_COMMAND:New("White", flareMenu, self.MenuSetMarkerType, self, "flare_white")
+    MENU_MISSION_COMMAND:New("None", markerMenu, self.MenuSetMarkerType, self, "none")
 
     -- Active messaging toggle
     MENU_MISSION_COMMAND:New("Active Messaging On", rootMenu, self.MenuSetActiveMessaging, self, true)
@@ -413,10 +418,6 @@ function PilotIntuition:SetupMenu()
     -- Air scanning toggle
     MENU_MISSION_COMMAND:New("Air Scanning On", rootMenu, self.MenuSetAirScanning, self, true)
     MENU_MISSION_COMMAND:New("Air Scanning Off", rootMenu, self.MenuSetAirScanning, self, false)
-
-    -- Ground scanning toggle
-    MENU_MISSION_COMMAND:New("Ground Scanning On", rootMenu, self.MenuSetGroundScanning, self, true)
-    MENU_MISSION_COMMAND:New("Ground Scanning Off", rootMenu, self.MenuSetGroundScanning, self, false)
 
     -- Per-player menu group: create a settings node for each active player
     self:SetupPlayerMenus()
@@ -437,15 +438,27 @@ function PilotIntuition:SetupPlayerMenus()
                 MENU_GROUP_COMMAND:New(playerGroup, "Dogfight Assist On", playerMenu, self.MenuSetPlayerDogfightAssist, self, unit, true)
                 MENU_GROUP_COMMAND:New(playerGroup, "Dogfight Assist Off", playerMenu, self.MenuSetPlayerDogfightAssist, self, unit, false)
                 -- also allow player to toggle markers themselves
-                MENU_GROUP_COMMAND:New(playerGroup, "Marker: Smoke", playerMenu, self.MenuSetPlayerMarker, self, unit, "smoke")
-                MENU_GROUP_COMMAND:New(playerGroup, "Marker: Flare", playerMenu, self.MenuSetPlayerMarker, self, unit, "flare")
-                MENU_GROUP_COMMAND:New(playerGroup, "Marker: None", playerMenu, self.MenuSetPlayerMarker, self, unit, "none")
+                local markerMenu = MENU_GROUP:New(playerGroup, "Marker Type", playerMenu)
+                local smokeMenu = MENU_GROUP:New(playerGroup, "Smoke", markerMenu)
+                MENU_GROUP_COMMAND:New(playerGroup, "Red", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_red")
+                MENU_GROUP_COMMAND:New(playerGroup, "Green", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_green")
+                MENU_GROUP_COMMAND:New(playerGroup, "Blue", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_blue")
+                MENU_GROUP_COMMAND:New(playerGroup, "White", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_white")
+                local flareMenu = MENU_GROUP:New(playerGroup, "Flare", markerMenu)
+                MENU_GROUP_COMMAND:New(playerGroup, "Red", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_red")
+                MENU_GROUP_COMMAND:New(playerGroup, "Green", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_green")
+                MENU_GROUP_COMMAND:New(playerGroup, "White", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_white")
+                MENU_GROUP_COMMAND:New(playerGroup, "None", markerMenu, self.MenuSetPlayerMarker, self, unit, "none")
                 -- Air scanning toggle
                 MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: On", playerMenu, self.MenuSetPlayerAirScanning, self, unit, true)
                 MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: Off", playerMenu, self.MenuSetPlayerAirScanning, self, unit, false)
-                -- Ground scanning toggle
-                MENU_GROUP_COMMAND:New(playerGroup, "Ground Scanning: On", playerMenu, self.MenuSetPlayerGroundScanning, self, unit, true)
-                MENU_GROUP_COMMAND:New(playerGroup, "Ground Scanning: Off", playerMenu, self.MenuSetPlayerGroundScanning, self, unit, false)
+                -- Ground targeting on-demand
+                local groundMenu = MENU_GROUP:New(playerGroup, "Ground Targeting", playerMenu)
+                MENU_GROUP_COMMAND:New(playerGroup, "Scan for Ground Targets", groundMenu, self.MenuScanGroundTargets, self, unit)
+                local markMenu = MENU_GROUP:New(playerGroup, "Mark Target", groundMenu)
+                for i=1,5 do
+                    MENU_GROUP_COMMAND:New(playerGroup, "Target " .. i, markMenu, self.MenuMarkGroundTarget, self, unit, i)
+                end
                 -- Alert frequency toggle
                 MENU_GROUP_COMMAND:New(playerGroup, "Alert Frequency: Normal", playerMenu, self.MenuSetPlayerAlertFrequency, self, unit, "normal")
                 MENU_GROUP_COMMAND:New(playerGroup, "Alert Frequency: Quiet", playerMenu, self.MenuSetPlayerAlertFrequency, self, unit, "quiet")
@@ -467,14 +480,16 @@ function PilotIntuition:MenuSetPlayerMarker(playerUnit, markerType)
         self.players[playerName].markerType = markerType
         local client = playerUnit:GetClient()
         if client then
-            MESSAGE:New(self:GetRandomMessage("markerSet", {markerType}), 10):ToClient(client)
+            local niceType = markerType:gsub("_", " "):gsub("(%w)(%w*)", function(first, rest) return first:upper() .. rest:lower() end)
+            MESSAGE:New(self:GetRandomMessage("markerSet", {niceType}), 10):ToClient(client)
         end
     end
 end
 function PilotIntuition:MenuSetMarkerType(type)
     env.info("PilotIntuition: MenuSetMarkerType called with " .. tostring(type))
     PILOT_INTUITION_CONFIG.markerType = type
-    local msg = self:GetRandomMessage("markerSet", {tostring(type)})
+    local niceType = type:gsub("_", " "):gsub("(%w)(%w*)", function(first, rest) return first:upper() .. rest:lower() end)
+    local msg = self:GetRandomMessage("markerSet", {niceType})
     env.info("PilotIntuition: Marker message: " .. msg)
     self:BroadcastMessageToAll(msg)
 end
@@ -542,6 +557,81 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
             MESSAGE:New(self:GetRandomMessage("alertFrequencyToggle", {mode}), 10):ToClient(client)
         end
     end
+end
+
+function PilotIntuition:MenuScanGroundTargets(playerUnit)
+    env.info("PilotIntuition: MenuScanGroundTargets called for " .. tostring(playerUnit and playerUnit:GetName()))
+    if not playerUnit then return end
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    local playerData = self.players[playerName]
+    if not playerData then return end
+    local client = playerUnit:GetClient()
+    if not client then return end
+
+    -- Collect enemy ground groups within range
+    local playerPos = playerUnit:GetCoordinate()
+    local playerCoalition = playerUnit:GetCoalition()
+    local enemyCoalition = (playerCoalition == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
+    local allGroups = coalition.getGroups(enemyCoalition)
+    local enemyGroundGroups = {}
+    for _, group in ipairs(allGroups) do
+        if group:IsAlive() and (group:GetCategory() == Group.Category.GROUND or group:GetCategory() == Group.Category.SHIP) then
+            local distance = playerPos:Get2DDistance(group:GetCoordinate())
+            if distance <= PILOT_INTUITION_CONFIG.groundDetectionRange then
+                table.insert(enemyGroundGroups, {group = group, distance = distance})
+            end
+        end
+    end
+
+    -- Sort by distance
+    table.sort(enemyGroundGroups, function(a,b) return a.distance < b.distance end)
+
+    -- Take top 5
+    local scanned = {}
+    for i=1, math.min(5, #enemyGroundGroups) do
+        scanned[i] = enemyGroundGroups[i].group
+    end
+
+    -- Store in playerData
+    playerData.scannedGroundTargets = scanned
+
+    -- Send messages listing targets
+    for i, group in ipairs(scanned) do
+        local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(group:GetCoordinate()))
+        local distance = playerPos:Get2DDistance(group:GetCoordinate()) / 1000  -- In km
+        local unitType = group:GetUnits()[1]:GetTypeName()
+        local category = self:ClassifyGroundUnit(unitType)
+        local groupSize = #group:GetUnits()
+        local sizeDesc = groupSize == 1 and "single" or (groupSize <= 4 and "group" or "platoon")
+        MESSAGE:New(string.format("Target %d: %s %s %s, Bearing %.0f, Range %.1f km", i, category, sizeDesc, unitType, bearing, distance), 30):ToClient(client)
+    end
+
+    if #scanned == 0 then
+        MESSAGE:New("No enemy ground targets detected in range.", 10):ToClient(client)
+    else
+        MESSAGE:New("Select a target from the menu to mark it.", 10):ToClient(client)
+    end
+end
+
+function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
+    env.info("PilotIntuition: MenuMarkGroundTarget called for " .. tostring(playerUnit and playerUnit:GetName()) .. " index " .. tostring(index))
+    if not playerUnit then return end
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    local playerData = self.players[playerName]
+    if not playerData then return end
+    local client = playerUnit:GetClient()
+    if not client then return end
+
+    local scanned = playerData.scannedGroundTargets or {}
+    local group = scanned[index]
+    if not group or not group:IsAlive() then
+        MESSAGE:New("Target " .. index .. " not available.", 10):ToClient(client)
+        return
+    end
+
+    -- Mark this target
+    self:ReportGroundTarget(group, playerUnit, client, true)  -- placeMarker = true
+    MESSAGE:New("Marked Target " .. index .. ".", 10):ToClient(client)
 end
 
 function PilotIntuition:MenuSetActiveMessaging(onoff)
@@ -851,7 +941,8 @@ function PilotIntuition:ReportDogfight(unit, playerPos, playerData, client, mess
     playerData.lastMessageTime = now
 end
 
-function PilotIntuition:ScanGroundTargetsForPlayer(playerUnit, client, activeClients, enemyGroundGroups)
+function PilotIntuition:ScanGroundTargetsForPlayer(playerUnit, client, activeClients, enemyGroundGroups, placeMarker)
+    if placeMarker == nil then placeMarker = true end
     local playerPos = playerUnit:GetCoordinate()
     local playerCoalition = playerUnit:GetCoalition()
     local enemyCoalition = (playerCoalition == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
@@ -896,7 +987,7 @@ function PilotIntuition:ScanGroundTargetsForPlayer(playerUnit, client, activeCli
     -- Mark and report the closest unmarked target
     if closestGroup then
         local targetID = closestGroup:GetName()
-        self:ReportGroundTarget(closestGroup, playerUnit, client)
+        self:ReportGroundTarget(closestGroup, playerUnit, client, placeMarker)
         self.trackedGroundTargets[targetID].marked = true
         playerData.trackedGroundTargets[targetID] = true
     end
@@ -938,7 +1029,8 @@ function PilotIntuition:CheckCloseFlyingForPlayer(playerUnit, playerData, client
     end
 end
 
-function PilotIntuition:ReportGroundTarget(group, playerUnit, client)
+function PilotIntuition:ReportGroundTarget(group, playerUnit, client, placeMarker)
+    if placeMarker == nil then placeMarker = true end
     local now = timer.getTime()
     if now - self.lastMessageTime < PILOT_INTUITION_CONFIG.messageCooldown then return end
     if not PILOT_INTUITION_CONFIG.activeMessaging then return end
@@ -953,21 +1045,31 @@ function PilotIntuition:ReportGroundTarget(group, playerUnit, client)
     MESSAGE:New(self:GetRandomMessage("groundTargetDetected", {category, sizeDesc, unitType, bearing, distance}), 10):ToClient(client)
     self.lastMessageTime = now
 
-    -- Place marker
-    -- Determine marker type: prefer player preference if set, otherwise global config
-    local markerType = PILOT_INTUITION_CONFIG.markerType
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    if self.players[playerName] and self.players[playerName].markerType then
-        markerType = self.players[playerName].markerType
-    end
-    if markerType ~= "none" then
-        local coord = group:GetCoordinate()
-        if markerType == "smoke" then
-            coord:SmokeRed()
-        elseif markerType == "flare" then
-            coord:FlareRed()
+    -- Place marker if requested
+    if placeMarker then
+        -- Determine marker type: prefer player preference if set, otherwise global config
+        local markerType = PILOT_INTUITION_CONFIG.markerType
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        if self.players[playerName] and self.players[playerName].markerType then
+            markerType = self.players[playerName].markerType
         end
-        -- Note: Markers are temporary; Moose doesn't have built-in timed markers, so this is basic
+        if markerType ~= "none" then
+            local coord = group:GetCoordinate()
+            local markerTypePart, color = markerType:match("(%w+)_(%w+)")
+            if markerTypePart == "smoke" then
+                if color == "red" then coord:SmokeRed()
+                elseif color == "green" then coord:SmokeGreen()
+                elseif color == "blue" then coord:SmokeBlue()
+                elseif color == "white" then coord:SmokeWhite()
+                end
+            elseif markerTypePart == "flare" then
+                if color == "red" then coord:FlareRed()
+                elseif color == "green" then coord:FlareGreen()
+                elseif color == "white" then coord:FlareWhite()
+                end
+            end
+            -- Note: Markers are temporary; Moose doesn't have built-in timed markers, so this is basic
+        end
     end
 end
 

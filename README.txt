@@ -10,7 +10,7 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 
 Features
 
-- Dynamic Detection Ranges: Base ranges adjusted by formation bonuses and environmental factors (night, bad weather).
+- Dynamic Detection Ranges: This core feature simulates historical WWII reconnaissance by dynamically adjusting spotting distances based on formation flying and environmental conditions. Detection ranges for air and ground targets are boosted when flying in close formation with wingmen, reflecting how pilots in WWII relied on mutual support for better situational awareness. For instance, a solo pilot has base detection ranges (e.g., 5km for air targets, 3km for ground). In a 2-ship formation (two pilots flying within 1km of each other), ranges double to 10km air and 6km ground. A 4-ship formation triples them to 15km air and 9km ground, up to a maximum multiplier of 6x. Environmental factors further modify this: at night (22:00-06:00), ranges are reduced by 50%; bad weather can apply an additional 30% penalty. This encourages tactical formation flying and adapts to real-world conditions, making solo flights more challenging and formations more rewarding.
 - Realistic Messaging: Simulates pilot radio calls for spotting bandits, ground threats, and formation feedback.
 - Formation Integrity Monitoring: Alerts for wingmen presence and formation status.
 - Dogfight Assistance: Warnings for merging bandits, tail threats, head-on encounters, and more.
@@ -49,17 +49,17 @@ Usage
 
 In-Game Controls
 - F10 Menu:
-  - Global Settings: Mission-wide toggles for active messaging, markers, and scanning (air/ground).
-  - Per-Player Settings: Individual controls under "Pilot Intuition" for dogfight assist, markers, scanning preferences, and alert frequency (Normal/Quiet/Verbose).
+  - Global Settings: Mission-wide toggles for active messaging, markers, and air scanning.
+  - Per-Player Settings: Individual controls under "Pilot Intuition" for dogfight assist, markers, air scanning preferences, alert frequency (Normal/Quiet/Verbose), and ground targeting (scan and select targets to mark).
 - Automatic Alerts: Receive voice-like messages for detected threats, formation changes, and compliments (based on your enabled scans).
 - On-Demand Summaries: Request situation summaries via menu options.
 
 Gameplay Tips
-- Formation Flying: Fly close to wingmen to increase detection ranges.
-- Environmental Factors: Be aware that night and bad weather reduce spotting distances.
+- Formation Flying: Fly close to wingmen to increase detection ranges. This is a key tactical element inspired by WWII aviation, where formations provided mutual spotting support. For example, maintaining a tight 2-ship formation boosts your air detection range from 5km to 10km, allowing you to spot bandits twice as far. In larger formations like a 4-ship flight, ranges can reach 15km, giving you a significant advantage in reconnaissance and defense. Stay within 1km of your wingmen to qualify for these bonuses—formations enhance capabilities but require discipline to maintain.
+- Environmental Factors: Be aware that night and bad weather reduce spotting distances. At night, detection ranges are halved, simulating reduced visibility without modern aids. Bad weather applies additional penalties, making formation flying even more critical for maintaining awareness.
 - Dogfights: Use the system for merge warnings and tactical advice.
-- Ground Attacks: Get alerts for nearby enemy units and vehicles.
-- Custom Scanning: Toggle air or ground scanning on/off via F10 menu to focus on specific threats (e.g., disable ground alerts during air battles).
+- Ground Attacks: Use on-demand ground scanning to detect and mark specific targets. Scan lists up to 5 nearby targets, then select which one to mark with smoke/flares.
+- Custom Scanning: Toggle air scanning on/off via F10 menu. Use "Ground Targeting" submenu to scan for nearby ground targets and select specific ones to mark.
 - Alert Frequency: Adjust alert frequency to "Quiet" for fewer messages in busy situations or "Verbose" for more detailed feedback.
 
 Configuration
@@ -71,7 +71,7 @@ Key Settings
 - Multipliers: Set environmental factors like night and weather penalties.
 - Messaging: Control cooldowns and enable/disable features.
 - Markers: Choose marker type and duration.
-- Scanning Toggles: Enable/disable air and ground scanning globally (players can override individually).
+- Scanning Toggles: Enable/disable air scanning globally (players can override individually). Ground scanning is on-demand.
 - Dogfight Assist: Toggle assistance and set thresholds.
 
 For detailed parameter descriptions, refer to the comments in the script.
