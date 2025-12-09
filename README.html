@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WWII Pilot Intuition System</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
+        h1, h2, h3 { color: #333; }
+        ul { margin-left: 20px; }
+        code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
+        pre { background-color: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>WWII Pilot Intuition System</h1>
+    <p><a href="https://www.lua.org/"><img src="https://img.shields.io/badge/Lua-5.1-blue.svg" alt="Lua"></a> <a href="https://www.digitalcombatsimulator.com/"><img src="https://img.shields.io/badge/DCS%20World-Compatible-green.svg" alt="DCS World"></a></p>
+    <p>A Moose Framework-based script for DCS World that simulates WWII-era pilot intuition and reconnaissance, enhancing immersion in historical aviation scenarios by providing realistic target spotting without modern aids.</p>
+
+    <h2>Description</h2>
+    <p>The WWII Pilot Intuition System bridges the gap between modern DCS gameplay and historical WWII aviation. In an era without radar or advanced avionics, pilots relied on visual scanning, formation flying, and intuition to maintain situational awareness. This script recreates that experience by alerting players to nearby air and ground threats through voice-like messages and optional visual markers.</p>
+    <p>Whether flying solo or in formation, players receive timely warnings about bandits, ground units, and tactical situations, promoting better tactics and deeper immersion in WWII-themed missions.</p>
+
+    <h2>Features</h2>
+    <ul>
+        <li><strong>Dynamic Detection Ranges</strong>: Base ranges adjusted by formation bonuses and environmental factors (night, bad weather).</li>
+        <li><strong>Realistic Messaging</strong>: Simulates pilot radio calls for spotting bandits, ground threats, and formation feedback.</li>
+        <li><strong>Formation Integrity Monitoring</strong>: Alerts for wingmen presence and formation status.</li>
+        <li><strong>Dogfight Assistance</strong>: Warnings for merging bandits, tail threats, head-on encounters, and more.</li>
+        <li><strong>Visual Markers</strong>: Optional smoke or flare markers for spotted targets.</li>
+        <li><strong>Independent Scanning Toggles</strong>: Separate controls for air and ground target detection, available globally (mission-wide) and per-player.</li>
+        <li><strong>Player Customization</strong>: Configurable settings via in-game F10 menu, including per-player overrides for scanning preferences and alert frequency modes.</li>
+        <li><strong>Environmental Awareness</strong>: Reduced detection ranges at night or in bad weather.</li>
+        <li><strong>Multiplayer Support</strong>: Works in both single-player and multiplayer environments.</li>
+    </ul>
+
+    <h2>Installation</h2>
+    <h3>Prerequisites</h3>
+    <ul>
+        <li><strong>DCS World</strong>: Ensure you have DCS World installed and updated.</li>
+        <li><strong>Moose Framework</strong>: Download and install the Moose framework from <a href="https://flightcontrol-master.github.io/MOOSE_DOCS/">FlightControl's MOOSE Documentation</a>.</li>
+    </ul>
+    <h3>Steps</h3>
+    <ol>
+        <li><strong>Download the Script</strong>:
+            <ul>
+                <li>Clone or download this repository.</li>
+                <li>Copy <code>Moose_WWII_PilotIntuition.lua</code> to your DCS mission folder.</li>
+            </ul>
+        </li>
+        <li><strong>Include Moose Framework</strong>:
+            <ul>
+                <li>Ensure <code>Moose_.lua</code> is also in your mission folder (included in this repo).</li>
+            </ul>
+        </li>
+        <li><strong>Add to Mission</strong>:
+            <ul>
+                <li>Open your DCS mission in the Mission Editor.</li>
+                <li>Go to <strong>Triggers</strong> &gt; <strong>Mission Start</strong> &gt; <strong>Do Script File</strong>.</li>
+                <li>Select <code>Moose_WWII_PilotIntuition.lua</code>.</li>
+                <li>Save and export the mission.</li>
+            </ul>
+        </li>
+        <li><strong>Test the Mission</strong>:
+            <ul>
+                <li>Load the mission in DCS.</li>
+                <li>The system initializes automatically on mission start.</li>
+                <li>Players will see a welcome message and can access settings via the F10 menu.</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2>Usage</h2>
+    <h3>In-Game Controls</h3>
+    <ul>
+        <li><strong>F10 Menu</strong>:
+            <ul>
+                <li><strong>Global Settings</strong>: Mission-wide toggles for active messaging, markers, and scanning (air/ground).</li>
+                <li><strong>Per-Player Settings</strong>: Individual controls under "Pilot Intuition" for dogfight assist, markers, scanning preferences, and alert frequency (Normal/Quiet/Verbose).</li>
+            </ul>
+        </li>
+        <li><strong>Automatic Alerts</strong>: Receive voice-like messages for detected threats, formation changes, and compliments (based on your enabled scans).</li>
+        <li><strong>On-Demand Summaries</strong>: Request situation summaries via menu options.</li>
+    </ul>
+    <h3>Gameplay Tips</h3>
+    <ul>
+        <li><strong>Formation Flying</strong>: Fly close to wingmen to increase detection ranges.</li>
+        <li><strong>Environmental Factors</strong>: Be aware that night and bad weather reduce spotting distances.</li>
+        <li><strong>Dogfights</strong>: Use the system for merge warnings and tactical advice.</li>
+        <li><strong>Ground Attacks</strong>: Get alerts for nearby enemy units and vehicles.</li>
+        <li><strong>Custom Scanning</strong>: Toggle air or ground scanning on/off via F10 menu to focus on specific threats (e.g., disable ground alerts during air battles).</li>
+        <li><strong>Alert Frequency</strong>: Adjust alert frequency to "Quiet" for fewer messages in busy situations or "Verbose" for more detailed feedback.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <p>The script uses a global configuration table <code>PILOT_INTUITION_CONFIG</code> for easy customization. Edit the values in <code>Moose_WWII_PilotIntuition.lua</code> before loading the mission. Players can override global settings via the F10 menu for personalized experience.</p>
+    <h3>Key Settings</h3>
+    <ul>
+        <li><strong>Detection Ranges</strong>: Adjust base ranges for air and ground targets.</li>
+        <li><strong>Multipliers</strong>: Set environmental factors like night and weather penalties.</li>
+        <li><strong>Messaging</strong>: Control cooldowns and enable/disable features.</li>
+        <li><strong>Markers</strong>: Choose marker type and duration.</li>
+        <li><strong>Scanning Toggles</strong>: Enable/disable air and ground scanning globally (players can override individually).</li>
+        <li><strong>Dogfight Assist</strong>: Toggle assistance and set thresholds.</li>
+    </ul>
+    <p>For detailed parameter descriptions, refer to the comments in the script.</p>
+
+    <h2>Examples</h2>
+    <h3>Basic Mission Setup</h3>
+    <ol>
+        <li>Create a new DCS mission with WWII aircraft.</li>
+        <li>Add enemy AI units or multiplayer slots.</li>
+        <li>Include the script as described in Installation.</li>
+        <li>Fly and observe alerts for spotted targets.</li>
+    </ol>
+    <h3>Custom Configuration</h3>
+    <pre><code>PILOT_INTUITION_CONFIG = {
+    airDetectionRange = 6000,  -- Increase air detection range
+    dogfightAssistEnabled = false,  -- Disable dogfight help
+    markerType = "flare",  -- Use flares instead of smoke
+}</code></pre>
+
+    <h2>Contributing</h2>
+    <p>Contributions are welcome! Please follow these steps:</p>
+    <ol>
+        <li>Fork the repository.</li>
+        <li>Create a feature branch: <code>git checkout -b feature/your-feature</code></li>
+        <li>Commit your changes: <code>git commit -m 'Add your feature'</code></li>
+        <li>Push to the branch: <code>git push origin feature/your-feature</code></li>
+        <li>Open a Pull Request.</li>
+    </ol>
+    <h3>Development Notes</h3>
+    <ul>
+        <li>Ensure compatibility with Moose Framework updates.</li>
+        <li>Test changes in various DCS mission scenarios.</li>
+        <li>Update documentation for new features.</li>
+    </ul>
+
+    <h2>License</h2>
+    <p>Copyright 2025 F99th-TracerFacer</p>
+    <p>This project is open source under the MIT License. See <a href="LICENSE">LICENSE</a> for details.</p>
+
+    <h2>Credits</h2>
+    <ul>
+        <li><strong>Script by</strong>: F99th-TracerFacer</li>
+        <li><strong>Built on the MOOSE framework</strong></li>
+        <li><strong>Special thanks to the DCS and MOOSE communities</strong></li>
+        <li><strong>Discord</strong>: <a href="https://discord.gg/NdZ2JuSU">https://discord.gg/NdZ2JuSU</a> (The Fighting 99th Discord Server where I spend most of my time.)</li>
+    </ul>
+
+    <h2>Support</h2>
+    <p>For issues, questions, or suggestions:</p>
+    <ul>
+        <li>Open an issue on <a href="https://github.com/iTracerFacer/WWII_PilotIntuition/issues">GitHub</a>.</li>
+        <li>Check the <a href="https://forum.dcs.world/">DCS Forums</a> for community support.</li>
+    </ul>
+
+    <p>Enjoy immersive WWII flying with enhanced situational awareness!</p>
+</body>
+</html>

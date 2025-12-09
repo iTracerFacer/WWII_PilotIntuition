@@ -19,7 +19,7 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 - **Dogfight Assistance**: Warnings for merging bandits, tail threats, head-on encounters, and more.
 - **Visual Markers**: Optional smoke or flare markers for spotted targets.
 - **Independent Scanning Toggles**: Separate controls for air and ground target detection, available globally (mission-wide) and per-player.
-- **Player Customization**: Configurable settings via in-game F10 menu, including per-player overrides for scanning preferences.
+- **Player Customization**: Configurable settings via in-game F10 menu, including per-player overrides for scanning preferences and alert frequency modes.
 - **Environmental Awareness**: Reduced detection ranges at night or in bad weather.
 - **Multiplayer Support**: Works in both single-player and multiplayer environments.
 
@@ -53,7 +53,7 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 ### In-Game Controls
 - **F10 Menu**:
   - **Global Settings**: Mission-wide toggles for active messaging, markers, and scanning (air/ground).
-  - **Per-Player Settings**: Individual controls under "Pilot Intuition" for dogfight assist, markers, and scanning preferences.
+  - **Per-Player Settings**: Individual controls under "Pilot Intuition" for dogfight assist, markers, scanning preferences, and alert frequency (Normal/Quiet/Verbose).
 - **Automatic Alerts**: Receive voice-like messages for detected threats, formation changes, and compliments (based on your enabled scans).
 - **On-Demand Summaries**: Request situation summaries via menu options.
 
@@ -63,6 +63,7 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 - **Dogfights**: Use the system for merge warnings and tactical advice.
 - **Ground Attacks**: Get alerts for nearby enemy units and vehicles.
 - **Custom Scanning**: Toggle air or ground scanning on/off via F10 menu to focus on specific threats (e.g., disable ground alerts during air battles).
+- **Alert Frequency**: Adjust alert frequency to "Quiet" for fewer messages in busy situations or "Verbose" for more detailed feedback.
 
 ## Configuration
 
@@ -110,15 +111,18 @@ Contributions are welcome! Please follow these steps:
 - Test changes in various DCS mission scenarios.
 - Update documentation for new features.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Credits
 
-- **Author**: iTracerFacer
-- **Framework**: Built on [Moose Framework](https://flightcontrol-master.github.io/MOOSE_DOCS/) by FlightControl.
-- **Inspiration**: Historical WWII aviation and DCS community scripts.
+- **Script by**: F99th-TracerFacer
+- **Built on the MOOSE framework**
+- **Special thanks to the DCS and MOOSE communities**
+- **Discord**: https://discord.gg/NdZ2JuSU (The Fighting 99th Discord Server where I spend most of my time.)
+
+## License
+
+Copyright 2025 F99th-TracerFacer
+
+This project is open source under the MIT License. See LICENSE for details.
 
 ## Support
 
