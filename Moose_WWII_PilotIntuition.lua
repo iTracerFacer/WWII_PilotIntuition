@@ -35,7 +35,7 @@
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 2  -- Default to INFO level
+PILOT_INTUITION_LOG_LEVEL = 3  -- Default to DEBUG level
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then
@@ -672,15 +672,22 @@ end
 
 -- BuildGroupMenus: Creates full menu tree for a player group (CTLD-style)
 function PilotIntuition:BuildGroupMenus(group)
-    env.info("PilotIntuition: BuildGroupMenus called for group: " .. group:GetName())
+    PILog(LOG_INFO, "PilotIntuition: BuildGroupMenus called for group: " .. group:GetName())
+    
+    -- Verify group is valid and has units
+    if not group or not group:IsAlive() then
+        PILog(LOG_ERROR, "PilotIntuition: Cannot create menu - group is nil or not alive")
+        return nil
+    end
     
     -- Create the main menu for this group
     local playerSubMenu = MENU_GROUP:New(group, "WWII Pilot Intuition")
+    PILog(LOG_INFO, "PilotIntuition: Main menu created for group: " .. group:GetName())
     
     -- Get first unit in group for callbacks
     local unit = group:GetUnit(1)
     if not unit then
-        env.info("PilotIntuition: WARNING - No unit found in group")
+        PILog(LOG_ERROR, "PilotIntuition: WARNING - No unit found in group")
         return playerSubMenu
     end
     
@@ -764,8 +771,6 @@ function PilotIntuition:BuildGroupMenus(group)
     MENU_GROUP_COMMAND:New(group, "Info (Default)", logMenu, function() self:SetLogLevel(2, group) end)
     MENU_GROUP_COMMAND:New(group, "Debug", logMenu, function() self:SetLogLevel(3, group) end)
     MENU_GROUP_COMMAND:New(group, "Trace (Verbose)", logMenu, function() self:SetLogLevel(4, group) end)
-    MENU_GROUP_COMMAND:New(group, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
-    MENU_GROUP_COMMAND:New(group, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
     
     PILog(LOG_INFO, "PilotIntuition: Menu created successfully for group " .. group:GetName())
     return playerSubMenu
@@ -879,11 +884,17 @@ end
 
 -- WireEventHandlers: Set up Birth event handler (CTLD-style)
 function PilotIntuition:WireEventHandlers()
-    PILog(LOG_INFO, "PilotIntuition: Wiring Birth event handler")
+    PILog(LOG_INFO, "PilotIntuition: Wiring event handlers using EVENTHANDLER")
+    
+    local handler = EVENTHANDLER:New()
+    handler:HandleEvent(EVENTS.Birth)
+    handler:HandleEvent(EVENTS.PlayerEnterUnit)
+    handler:HandleEvent(EVENTS.Shot)
+    handler:HandleEvent(EVENTS.Land)
     
     local selfref = self
     
-    EVENT:New():HandleEvent(EVENTS.Birth, function(EventData)
+    function handler:OnEventBirth(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
         if not unit or not unit:IsAlive() then return end
@@ -903,16 +914,38 @@ function PilotIntuition:WireEventHandlers()
         
         -- Send welcome message to group
         MESSAGE:New("WWII Pilot Intuition active! Use F10 menu for settings.", 10):ToGroup(group)
-    end)
+    end
     
-    -- Keep shot event handler for other functionality
-    EVENT:New():HandleEvent(EVENTS.Shot, function(EventData) 
+    function handler:OnEventPlayerEnterUnit(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        if not unit or not unit:IsAlive() then return end
+        
+        local group = unit:GetGroup()
+        if not group then return end
+        local groupName = group:GetName()
+        
+        PILog(LOG_INFO, "PilotIntuition: PlayerEnterUnit event for group: " .. groupName)
+        
+        -- Add a small delay to ensure the unit is fully initialized in multiplayer
+        SCHEDULER:New(nil, function()
+            -- Check if menu already exists
+            if not selfref.playerMenus[groupName] then
+                PILog(LOG_INFO, "PilotIntuition: Creating menu for player group: " .. groupName)
+                selfref.playerMenus[groupName] = selfref:BuildGroupMenus(group)
+                MESSAGE:New("WWII Pilot Intuition active! Use F10 menu for settings.", 10):ToGroup(group)
+            else
+                PILog(LOG_DEBUG, "PilotIntuition: Menu already exists for group: " .. groupName)
+            end
+        end, {}, 1)
+    end
+    
+    function handler:OnEventShot(EventData)
         selfref:OnPlayerShot(EventData)
         selfref:OnShotFired(EventData)
-    end)
+    end
     
-    -- Landing event handler for rearming illumination flares
-    EVENT:New():HandleEvent(EVENTS.Land, function(EventData)
+    function handler:OnEventLand(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
         if not unit or not unit:IsAlive() then return end
@@ -938,9 +971,10 @@ function PilotIntuition:WireEventHandlers()
             
             PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " rearmed illumination flares at friendly airbase")
         end
-    end)
+    end
     
-    PILog(LOG_INFO, "PilotIntuition: Event handlers wired")
+    self.EventHandler = handler
+    PILog(LOG_INFO, "PilotIntuition: Event handlers wired successfully")
 end
 
 function PilotIntuition:OnPlayerEnterUnit(EventData)
@@ -1938,10 +1972,25 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
             
             local targetID = unit:GetName()
             local now = timer.getTime()
-            local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(unit:GetCoordinate()))
-            local playerHeading = math.deg(playerUnit:GetHeading())
-            local relativeBearing = bearing - playerHeading
-            relativeBearing = (relativeBearing % 360 + 360) % 360  -- Normalize to 0-360
+            
+            -- Calculate bearing from player to bandit
+            local bearing = playerPos:HeadingTo(unit:GetCoordinate())
+            local playerHeading = playerUnit:GetHeading()  -- Already in degrees
+            
+            -- Calculate relative bearing (clock position)
+            local relativeBearing = (bearing - playerHeading + 360) % 360
+            
+            -- Calculate bandit's aspect angle (is he nose-on or tail-on to us?)
+            local banditHeading = unit:GetHeading()  -- Already in degrees
+            local banditToBearing = (bearing + 180) % 360  -- Reverse bearing (from bandit to player)
+            local aspectAngle = math.abs(banditToBearing - banditHeading)
+            if aspectAngle > 180 then aspectAngle = 360 - aspectAngle end  -- Normalize to 0-180
+            
+            -- Debug logging for first contact
+            if distance < 20000 and not playerData.trackedAirTargets[targetID] then
+                PILog(LOG_DEBUG, string.format("PilotIntuition: Initial contact %s - playerHdg:%.0f° bearing:%.0f° relBrg:%.0f° banditHdg:%.0f° aspect:%.0f°", 
+                    targetID, playerHeading, bearing, relativeBearing, banditHeading, aspectAngle))
+            end
 
             if not playerData.trackedAirTargets[targetID] then
                 local banditName = unit:GetPlayerName() or unit:GetName()
@@ -2019,12 +2068,20 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 local threatType = nil
                 local threatDetail = nil
                 
-                -- Determine threat level based on distance/closure
-                local threatLevel = "cold"
+                -- Determine threat level based on aspect angle AND distance
+                -- Hot = nose-on (0-45°), Cold = tail aspect (135-180°), Flanking/Beam = side aspect
+                local threatLevel = "distant"
                 if distance <= PILOT_INTUITION_CONFIG.threatHotRange then
                     threatLevel = "hot"
                 elseif distance <= PILOT_INTUITION_CONFIG.threatColdRange then
-                    threatLevel = "cold"
+                    -- Use aspect angle to determine if truly hot or cold
+                    if aspectAngle <= 45 then
+                        threatLevel = "hot"  -- Nose-on, coming at us
+                    elseif aspectAngle >= 135 then
+                        threatLevel = "cold"  -- Tail aspect, running away
+                    else
+                        threatLevel = "flanking"  -- Side aspect
+                    end
                 else
                     threatLevel = "distant"
                 end
@@ -2110,16 +2167,41 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
 
     -- Report multiple bandits situation with tactical picture
     PILog(LOG_DEBUG, string.format("PilotIntuition: Threatening bandits count: %d", #threateningBandits))
-    if #threateningBandits > 0 then
-        for i, threat in ipairs(threateningBandits) do
+    
+    -- COMBAT FOCUS: Filter out distant threats when in close combat
+    local inCloseCombat = false
+    local combatFocusRange = PILOT_INTUITION_CONFIG.threatHotRange * 2  -- 2km threshold for "close combat"
+    for _, threat in ipairs(threateningBandits) do
+        if threat.distance <= combatFocusRange and threat.threatLevel == "hot" then
+            inCloseCombat = true
+            break
+        end
+    end
+    
+    -- If in close combat, filter to only show immediate threats
+    local filteredThreats = threateningBandits
+    if inCloseCombat then
+        filteredThreats = {}
+        for _, threat in ipairs(threateningBandits) do
+            -- Only report threats within combat focus range OR threats that are hot/flanking
+            if threat.distance <= combatFocusRange or threat.threatLevel == "hot" or threat.threatLevel == "flanking" then
+                table.insert(filteredThreats, threat)
+            end
+        end
+        PILog(LOG_DEBUG, string.format("PilotIntuition: COMBAT FOCUS - Filtered %d distant threats, showing %d immediate threats", 
+            #threateningBandits - #filteredThreats, #filteredThreats))
+    end
+    
+    if #filteredThreats > 0 then
+        for i, threat in ipairs(filteredThreats) do
             PILog(LOG_DEBUG, string.format("  Threat %d: %s at %.0fm, type: %s", i, threat.unit:GetName(), threat.distance, threat.threatType))
         end
         local now = timer.getTime()
         if (now - playerData.lastDogfightTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
             local message = ""
-            if #threateningBandits == 1 then
+            if #filteredThreats == 1 then
                 -- Single bandit - detailed callout
-                local threat = threateningBandits[1]
+                local threat = filteredThreats[1]
                 local banditName = threat.banditName or "bandit"
                 if threat.threatDetail then
                     message = string.format("%s - %s! %s", banditName, threat.threatType:gsub("^%l", string.upper), threat.threatDetail)
@@ -2128,11 +2210,11 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 end
             else
                 -- Multiple bandits - build tactical picture, showing only most threatening
-                -- Sort by threat priority: hot > cold > distant, then by distance
-                table.sort(threateningBandits, function(a, b)
-                    local priorityOrder = {hot = 1, cold = 2, distant = 3}
-                    local aPriority = priorityOrder[a.threatLevel] or 4
-                    local bPriority = priorityOrder[b.threatLevel] or 4
+                -- Sort by threat priority: hot > flanking > cold > distant, then by distance
+                table.sort(filteredThreats, function(a, b)
+                    local priorityOrder = {hot = 1, flanking = 2, cold = 3, distant = 4}
+                    local aPriority = priorityOrder[a.threatLevel] or 5
+                    local bPriority = priorityOrder[b.threatLevel] or 5
                     if aPriority ~= bPriority then
                         return aPriority < bPriority
                     else
@@ -2141,8 +2223,8 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 end)
                 
                 local maxDisplay = PILOT_INTUITION_CONFIG.maxThreatDisplay
-                local displayCount = math.min(maxDisplay, #threateningBandits)
-                local totalCount = #threateningBandits
+                local displayCount = math.min(maxDisplay, #filteredThreats)
+                local totalCount = #filteredThreats
                 
                 message = string.format("Multiple bandits - %d contacts", totalCount)
                 if displayCount < totalCount then
@@ -2152,7 +2234,7 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 
                 local threats = {}
                 for i = 1, displayCount do
-                    local threat = threateningBandits[i]
+                    local threat = filteredThreats[i]
                     local banditName = threat.banditName or "unknown"
                     local desc = banditName .. " - " .. threat.threatType
                     if threat.threatDetail then
