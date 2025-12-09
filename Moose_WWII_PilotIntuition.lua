@@ -68,7 +68,6 @@ PILOT_INTUITION_CONFIG = {
     beamRange = 1500,  -- Meters for beam aspect detection
     separatingRange = 2000,  -- Meters - if opening past this after merge, call "separating"
     multipleBanditsRange = 2000,  -- Meters for multiple bandits detection
-    multipleBanditsRange = 2000,  -- Meters for multiple bandits detection
     multipleBanditsWarningCooldown = 300,  -- Seconds between "Multiple bandits in vicinity!" warnings (5 minutes)
     maxThreatDisplay = 3,  -- Maximum number of threats to display in multi-bandit tactical picture (most threatening first)
     combatIntensityThreshold = 3,  -- Number of bandits to trigger "high intensity" mode (increases cooldowns)
@@ -101,6 +100,7 @@ PILOT_INTUITION_CONFIG = {
     illuminationFlaresDefault = 3,  -- Number of illumination flares per sortie
     countAIWingmen = true,  -- Count AI units in same group as wingmen for formation bonus (false = players only count as wingmen)
     aiWingmenMultiplier = 1.0,  -- Multiplier for AI wingmen (0.5 = half credit, 1.0 = full credit)
+    distanceUnit = "mi",  -- Default distance unit: "km" for kilometers, "mi" for miles (nautical miles)
 }
 
 -- Message table with variations for different types
@@ -129,17 +129,17 @@ PILOT_INTUITION_MESSAGES = {
         "Get back in formation, lads! We're vulnerable.",
     },
     airTargetDetected = {
-        "Bandit %s at %.0f degrees, %.1f km, angels %.0f (%s)!",
-        "Enemy aircraft %s: %.0f degrees, %.1f km, altitude %.0f (%s).",
-        "Bogey %s at %.0f o'clock, %.1f km out, angels %.0f (%s).",
-        "Hostile contact %s: %.0f degrees, %.1f km, %.0f angels (%s).",
-        "Bandit inbound %s: %.0f degrees, %.1f km, angels %.0f (%s).",
+        "Bandit %s at %.0f degrees, %.1f %s, angels %.0f (%s)!",
+        "Enemy aircraft %s: %.0f degrees, %.1f %s, altitude %.0f (%s).",
+        "Bogey %s at %.0f o'clock, %.1f %s out, angels %.0f (%s).",
+        "Hostile contact %s: %.0f degrees, %.1f %s, %.0f angels (%s).",
+        "Bandit inbound %s: %.0f degrees, %.1f %s, angels %.0f (%s).",
     },
     groundTargetDetected = {
-        "%s contact: %s %s at %.0f degrees, %.1f km.",
-        "Ground threat: %s %s spotted at %.0f degrees, %.1f km.",
-        "%s units detected: %s %s, %.0f degrees, %.1f km.",
-        "Enemy ground: %s %s at bearing %.0f, %.1f km away.",
+        "%s contact: %s %s at %.0f degrees, %.1f %s.",
+        "Ground threat: %s %s spotted at %.0f degrees, %.1f %s.",
+        "%s units detected: %s %s, %.0f degrees, %.1f %s.",
+        "Enemy ground: %s %s at bearing %.0f, %.1f %s away.",
     },
     dogfightEngaged = {
         "Engaged!",
@@ -246,6 +246,26 @@ PilotIntuition = {
     lastDeepCleanup = 0,  -- For periodic deep cleanup
     playerMenus = {},  -- Track created player menus to avoid duplicates
 }
+
+-- Helper function to format distance based on player preference
+function PilotIntuition:FormatDistance(distanceMeters, playerKey)
+    local distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit
+    
+    -- Check for player-specific preference
+    if playerKey and self.players[playerKey] and self.players[playerKey].distanceUnit then
+        distanceUnit = self.players[playerKey].distanceUnit
+    end
+    
+    if distanceUnit == "mi" then
+        -- Convert to nautical miles (1 nautical mile = 1852 meters)
+        local distanceNM = distanceMeters / 1852
+        return distanceNM, "mi"
+    else
+        -- Default to kilometers
+        local distanceKM = distanceMeters / 1000
+        return distanceKM, "km"
+    end
+end
 
 function PilotIntuition:GetRandomMessage(messageType, params)
     local messages = PILOT_INTUITION_MESSAGES[messageType]
@@ -436,6 +456,7 @@ function PilotIntuition:ScanTargets()
                     frequencyMultiplier = 1.0,  -- Per-player alert frequency: 1.0=normal, 2.0=quiet, 0.5=verbose
                     threateningBandits = {},  -- Reusable table for detected threats
                     lastMultipleBanditsWarningTime = 0,  -- Cooldown for "Multiple bandits in vicinity!" message
+                    distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,  -- Player's distance unit preference
                 }
             end
             
@@ -717,8 +738,18 @@ function PilotIntuition:BuildGroupMenus(group)
     MENU_GROUP_COMMAND:New(group, "Quiet", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
     MENU_GROUP_COMMAND:New(group, "Verbose", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
     
-    -- Admin Settings submenu
-    local adminMenu = MENU_GROUP:New(group, "Admin Settings & Player Guides", playerSubMenu)
+    -- Summary submenu
+    local summaryMenu = MENU_GROUP:New(group, "Summary", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
+    MENU_GROUP_COMMAND:New(group, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
+    
+    -- Admin Settings submenu (placed last)
+    local adminMenu = MENU_GROUP:New(group, "Settings & Player Guides", playerSubMenu)
+    
+    -- Distance units submenu (under admin)
+    local distMenu = MENU_GROUP:New(group, "Distance Units", adminMenu)
+    MENU_GROUP_COMMAND:New(group, "Miles (Nautical)", distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "mi") end)
+    MENU_GROUP_COMMAND:New(group, "Kilometers", distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "km") end)
     
     -- Player Guide submenu
     local guideMenu = MENU_GROUP:New(group, "Player Guide", adminMenu)
@@ -733,9 +764,6 @@ function PilotIntuition:BuildGroupMenus(group)
     MENU_GROUP_COMMAND:New(group, "Info (Default)", logMenu, function() self:SetLogLevel(2, group) end)
     MENU_GROUP_COMMAND:New(group, "Debug", logMenu, function() self:SetLogLevel(3, group) end)
     MENU_GROUP_COMMAND:New(group, "Trace (Verbose)", logMenu, function() self:SetLogLevel(4, group) end)
-    
-    -- Summary submenu
-    local summaryMenu = MENU_GROUP:New(group, "Summary", playerSubMenu)
     MENU_GROUP_COMMAND:New(group, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
     MENU_GROUP_COMMAND:New(group, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
     
@@ -1196,6 +1224,28 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
     end
 end
 
+function PilotIntuition:MenuSetPlayerDistanceUnit(playerUnit, unit)
+    env.info("====== PilotIntuition: MenuSetPlayerDistanceUnit CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: unit = " .. tostring(unit))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    if playerKey and self.players[playerKey] then
+        self.players[playerKey].distanceUnit = unit
+        local client = playerUnit:GetClient()
+        if client then
+            local unitName = unit == "mi" and "Miles (Nautical)" or "Kilometers"
+            MESSAGE:New("Distance units set to " .. unitName .. ".", 10):ToClient(client)
+        end
+    end
+end
+
 function PilotIntuition:MenuScanGroundTargets(playerUnit)
     env.info("====== PilotIntuition: MenuScanGroundTargets CALLED ======")
     env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
@@ -1259,13 +1309,21 @@ function PilotIntuition:MenuScanGroundTargets(playerUnit)
 
     -- Send messages listing targets
     for i, group in ipairs(scanned) do
-        local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(group:GetCoordinate()))
-        local distance = playerPos:Get2DDistance(group:GetCoordinate()) / 1000  -- In km
+        local targetPos = group:GetCoordinate()
+        local bearing = playerPos:HeadingTo(targetPos)  -- Returns heading in degrees as number
+        
+        -- Ensure bearing is a valid number
+        if not bearing or type(bearing) ~= "number" then
+            bearing = 0  -- Fallback to 0 if bearing is invalid
+        end
+        
+        local distanceMeters = playerPos:Get2DDistance(targetPos)
+        local distance, unit = self:FormatDistance(distanceMeters, playerKey)
         local unitType = group:GetUnits()[1]:GetTypeName()
         local category = self:ClassifyGroundUnit(unitType)
         local groupSize = #group:GetUnits()
         local sizeDesc = groupSize == 1 and "single" or (groupSize <= 4 and "group" or "platoon")
-        MESSAGE:New(string.format("Target %d: %s %s %s, Bearing %.0f, Range %.1f km", i, category, sizeDesc, unitType, bearing, distance), 30):ToClient(client)
+        MESSAGE:New(string.format("Target %d: %s %s %s, Bearing %.0f, Range %.1f %s", i, category, sizeDesc, unitType, bearing, distance, unit), 30):ToClient(client)
     end
 
     if #scanned == 0 then
@@ -1286,11 +1344,17 @@ function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
         env.info("PilotIntuition: ERROR - No playerUnit provided")
         return 
     end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    local playerData = self.players[playerName]
-    if not playerData then return end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    local playerData = playerKey and self.players[playerKey]
+    if not playerData then 
+        env.info("PilotIntuition: ERROR - No player data found for " .. tostring(playerKey))
+        return 
+    end
     local client = playerUnit:GetClient()
-    if not client then return end
+    if not client then 
+        env.info("PilotIntuition: ERROR - No client found")
+        return 
+    end
 
     local scanned = playerData.scannedGroundTargets or {}
     local group = scanned[index]
@@ -1305,14 +1369,30 @@ function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
 end
 
 function PilotIntuition:MenuDropIlluminationAtPlayer(playerUnit)
-    if not playerUnit or not playerUnit:IsAlive() then return end
+    env.info("====== PilotIntuition: MenuDropIlluminationAtPlayer CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit or unit not alive")
+        return 
+    end
     
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    local playerData = self.players[playerName]
-    if not playerData then return end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: playerKey = " .. tostring(playerKey))
     
+    if not playerKey or not self.players[playerKey] then
+        env.info("PilotIntuition: ERROR - Player data not found for: " .. tostring(playerKey))
+        return
+    end
+    
+    local playerData = self.players[playerKey]
     local client = playerUnit:GetClient()
-    if not client then return end
+    if not client then 
+        env.info("PilotIntuition: ERROR - Could not get client")
+        return 
+    end
     
     -- Check if player has flares remaining
     if (playerData.illuminationFlares or 0) <= 0 then
@@ -1331,15 +1411,26 @@ function PilotIntuition:MenuDropIlluminationAtPlayer(playerUnit)
     
     -- Drop illumination flare at player position with altitude offset
     local playerPos = playerUnit:GetCoordinate()
+    if not playerPos then
+        env.info("PilotIntuition: ERROR - Could not get player coordinate")
+        MESSAGE:New("Cannot determine position for illumination drop.", 5):ToClient(client)
+        return
+    end
     PILog(LOG_INFO, "PilotIntuition: Player position: " .. playerPos:ToStringLLDMS())
     
-    -- Get altitude and add offset
-    local currentAlt = playerPos:GetAltitude()
+    -- Get altitude from unit directly (more reliable than coordinate)
+    local currentAlt = playerUnit:GetAltitude()
+    if not currentAlt or type(currentAlt) ~= "number" then
+        env.info("PilotIntuition: ERROR - Could not get valid altitude from unit")
+        MESSAGE:New("Cannot determine altitude for illumination drop.", 5):ToClient(client)
+        return
+    end
     PILog(LOG_INFO, "PilotIntuition: Current altitude: " .. currentAlt .. "m")
     
     -- Create new coordinate at higher altitude
     local illuAlt = currentAlt + PILOT_INTUITION_CONFIG.illuminationAltitude
-    local illuPos = playerPos:SetAltitude(illuAlt)
+    local illuPos = COORDINATE:NewFromVec3(playerPos:GetVec3())
+    illuPos = illuPos:SetAltitude(illuAlt)
     PILog(LOG_INFO, "PilotIntuition: Illumination altitude: " .. illuAlt .. "m")
     
     -- Try to drop illumination bomb
@@ -1352,18 +1443,35 @@ function PilotIntuition:MenuDropIlluminationAtPlayer(playerUnit)
     playerData.lastIlluminationTime = now
     
     MESSAGE:New("Illumination flare dropped at your position. (" .. playerData.illuminationFlares .. " remaining)", 10):ToClient(client)
-    PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " dropped illumination at own position. " .. playerData.illuminationFlares .. " flares remaining")
+    PILog(LOG_INFO, "PilotIntuition: Player " .. playerKey .. " dropped illumination at own position. " .. playerData.illuminationFlares .. " flares remaining")
 end
 
 function PilotIntuition:MenuDropIlluminationOnTarget(playerUnit, index)
-    if not playerUnit or not playerUnit:IsAlive() then return end
+    env.info("====== PilotIntuition: MenuDropIlluminationOnTarget CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    env.info("PilotIntuition: index = " .. tostring(index))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit or unit not alive")
+        return 
+    end
     
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    local playerData = self.players[playerName]
-    if not playerData then return end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: playerKey = " .. tostring(playerKey))
     
+    if not playerKey or not self.players[playerKey] then
+        env.info("PilotIntuition: ERROR - Player data not found for: " .. tostring(playerKey))
+        return
+    end
+    
+    local playerData = self.players[playerKey]
     local client = playerUnit:GetClient()
-    if not client then return end
+    if not client then 
+        env.info("PilotIntuition: ERROR - Could not get client")
+        return 
+    end
     
     -- Check if player has flares remaining
     if (playerData.illuminationFlares or 0) <= 0 then
@@ -1390,15 +1498,29 @@ function PilotIntuition:MenuDropIlluminationOnTarget(playerUnit, index)
     
     -- Drop illumination flare over target with altitude offset
     local targetPos = group:GetCoordinate()
+    if not targetPos then
+        env.info("PilotIntuition: ERROR - Could not get target coordinate")
+        MESSAGE:New("Cannot determine target position for illumination drop.", 5):ToClient(client)
+        return
+    end
     PILog(LOG_INFO, "PilotIntuition: Target position: " .. targetPos:ToStringLLDMS())
     
-    -- Get altitude and add offset
-    local targetAlt = targetPos:GetAltitude()
+    -- Get altitude from ground level (ground units are at ground level)
+    -- Use a safe default altitude for ground targets
+    local targetAlt = 0
+    local firstUnit = group:GetUnit(1)
+    if firstUnit and firstUnit:IsAlive() then
+        local unitAlt = firstUnit:GetAltitude()
+        if unitAlt and type(unitAlt) == "number" then
+            targetAlt = unitAlt
+        end
+    end
     PILog(LOG_INFO, "PilotIntuition: Target altitude: " .. targetAlt .. "m")
     
     -- Create new coordinate at higher altitude
     local illuAlt = targetAlt + PILOT_INTUITION_CONFIG.illuminationAltitude
-    local illuPos = targetPos:SetAltitude(illuAlt)
+    local illuPos = COORDINATE:NewFromVec3(targetPos:GetVec3())
+    illuPos = illuPos:SetAltitude(illuAlt)
     PILog(LOG_INFO, "PilotIntuition: Illumination altitude: " .. illuAlt .. "m")
     
     -- Try to drop illumination bomb
@@ -1411,9 +1533,10 @@ function PilotIntuition:MenuDropIlluminationOnTarget(playerUnit, index)
     playerData.lastIlluminationTime = now
     
     local bearing = playerUnit:GetCoordinate():GetAngleDegrees(playerUnit:GetCoordinate():GetDirectionVec3(targetPos))
-    local distance = playerUnit:GetCoordinate():Get2DDistance(targetPos) / 1000
-    MESSAGE:New(string.format("Illumination flare dropped on Target %d (%.0f°, %.1fkm). (%d remaining)", index, bearing, distance, playerData.illuminationFlares), 10):ToClient(client)
-    PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " dropped illumination on target " .. index .. ". " .. playerData.illuminationFlares .. " flares remaining")
+    local rawDistance = playerUnit:GetCoordinate():Get2DDistance(targetPos)
+    local distance, unit = self:FormatDistance(rawDistance, playerKey)
+    MESSAGE:New(string.format("Illumination flare dropped on Target %d (%.0f°, %.1f%s). (%d remaining)", index, bearing, distance, unit, playerData.illuminationFlares), 10):ToClient(client)
+    PILog(LOG_INFO, "PilotIntuition: Player " .. playerKey .. " dropped illumination on target " .. index .. ". " .. playerData.illuminationFlares .. " flares remaining")
 end
 
 function PilotIntuition:MenuSetActiveMessaging(onoff)
@@ -1515,8 +1638,11 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
     
     -- Collect ground threats with details
     local groundThreats = {}
-    for id, g in pairs(data.trackedGroundTargets or {}) do
-        if g and g:IsAlive() then
+    for id, _ in pairs(data.trackedGroundTargets or {}) do
+        -- Look up actual ground group from global table
+        local groundData = self.trackedGroundTargets[id]
+        if groundData and groundData.group and groundData.group:IsAlive() then
+            local g = groundData.group
             local gPos = g:GetCoordinate()
             local distance = 0
             local bearing = 0
@@ -1553,11 +1679,13 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
         
         if #airThreats > 0 then
             local closest = airThreats[1]
-            table.insert(parts, string.format("%d bandit%s (closest: %s @ %.1fkm %s)", 
+            local distance, unit = self:FormatDistance(closest.distance, playerName)
+            table.insert(parts, string.format("%d bandit%s (closest: %s @ %.1f%s %s)", 
                 #airThreats, 
                 #airThreats > 1 and "s" or "",
                 closest.name, 
-                closest.distance / 1000, 
+                distance, 
+                unit,
                 closest.threat))
         end
         
@@ -1571,9 +1699,9 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
             local mult = (wingmen > 0) and (2 * wingmen) or 1
             if mult > PILOT_INTUITION_CONFIG.maxMultiplier then mult = PILOT_INTUITION_CONFIG.maxMultiplier end
             local envMult = self:GetDetectionMultiplier()
-            local airRange = math.floor((PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult) / 1000)
-            local groundRange = math.floor((PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult) / 1000)
-            table.insert(parts, string.format("Formation: %d wingmen (detect: %dkm air/%dkm gnd)", wingmen, airRange, groundRange))
+            local airRange, airUnit = self:FormatDistance(PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult, playerName)
+            local groundRange, groundUnit = self:FormatDistance(PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult, playerName)
+            table.insert(parts, string.format("Formation: %d wingmen (detect: %.0f%s air/%.0f%s gnd)", wingmen, airRange, airUnit, groundRange, groundUnit))
         else
             table.insert(parts, "Solo (reduced detection)")
         end
@@ -1594,8 +1722,9 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
             table.insert(lines, "\nAIR THREATS:")
             for i, threat in ipairs(airThreats) do
                 local angels = math.floor(threat.altitude * 3.28084 / 1000)  -- Convert to thousands of feet
-                table.insert(lines, string.format("  %d. %s @ %03d°, %.1fkm, angels %d (%s)", 
-                    i, threat.name, math.floor(threat.bearing), threat.distance / 1000, angels, threat.threat))
+                local distance, unit = self:FormatDistance(threat.distance, playerName)
+                table.insert(lines, string.format("  %d. %s @ %03d°, %.1f%s, angels %d (%s)", 
+                    i, threat.name, math.floor(threat.bearing), distance, unit, angels, threat.threat))
             end
         else
             table.insert(lines, "\nAIR THREATS: None")
@@ -1605,8 +1734,9 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
         if #groundThreats > 0 then
             table.insert(lines, "\nGROUND THREATS:")
             for i, threat in ipairs(groundThreats) do
-                table.insert(lines, string.format("  %d. %s @ %03d°, %.1fkm", 
-                    i, threat.category, math.floor(threat.bearing), threat.distance / 1000))
+                local distance, unit = self:FormatDistance(threat.distance, playerName)
+                table.insert(lines, string.format("  %d. %s @ %03d°, %.1f%s", 
+                    i, threat.category, math.floor(threat.bearing), distance, unit))
             end
         else
             table.insert(lines, "\nGROUND THREATS: None")
@@ -1617,8 +1747,8 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
         local mult = (wingmen > 0) and (2 * wingmen) or 1
         if mult > PILOT_INTUITION_CONFIG.maxMultiplier then mult = PILOT_INTUITION_CONFIG.maxMultiplier end
         local envMult = self:GetDetectionMultiplier()
-        local airRange = math.floor((PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult) / 1000)
-        local groundRange = math.floor((PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult) / 1000)
+        local airRange, airUnit = self:FormatDistance(PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult, playerName)
+        local groundRange, groundUnit = self:FormatDistance(PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult, playerName)
         
         table.insert(lines, "\nFORMATION:")
         if wingmen > 0 then
@@ -1626,7 +1756,7 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
         else
             table.insert(lines, "  Status: Solo flight")
         end
-        table.insert(lines, string.format("  Detection: %dkm air, %dkm ground", airRange, groundRange))
+        table.insert(lines, string.format("  Detection: %.0f%s air, %.0f%s ground", airRange, airUnit, groundRange, groundUnit))
         
         return table.concat(lines, "\n")
     end
@@ -1698,6 +1828,7 @@ end
 -- (old ScanTargets removed; using the optimized ScanTargets above)
 
 function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, activeClients, enemyAirUnits)
+    local playerKey = self:GetPlayerDataKey(playerUnit)
     local playerPos = playerUnit:GetCoordinate()
     local playerCoalition = playerUnit:GetCoalition()
     local enemyCoalition = (playerCoalition == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
@@ -1929,7 +2060,8 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                     local clockPos = math.floor((relativeBearing + 15) / 30) + 1
                     if clockPos > 12 then clockPos = clockPos - 12 end
                     threatType = threatLevel
-                    threatDetail = string.format("%d o'clock, %.1fkm", clockPos, distance / 1000)
+                    local distValue, distUnit = self:FormatDistance(distance, playerKey)
+                    threatDetail = string.format("%d o'clock, %.1f%s", clockPos, distValue, distUnit)
                     if closing then
                         threatDetail = threatDetail .. ", closing"
                     end
@@ -2047,7 +2179,8 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     if #threateningBandits == 0 and closestUnit then
         local data = playerData.trackedAirTargets[closestUnit:GetName()]
         if data and not data.engaged then
-            self:ReportAirTarget(closestUnit, playerPos, playerData, client)
+            local playerKey = self:GetPlayerDataKey(playerUnit)
+            self:ReportAirTarget(closestUnit, playerPos, playerData, client, playerKey)
         end
     end
 
@@ -2061,22 +2194,23 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     end
 end
 
-function PilotIntuition:ReportAirTarget(unit, playerPos, playerData, client)
+function PilotIntuition:ReportAirTarget(unit, playerPos, playerData, client, playerKey)
     local now = timer.getTime()
     if now - playerData.lastMessageTime < (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then return end
     if not PILOT_INTUITION_CONFIG.activeMessaging then return end
 
     local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(unit:GetCoordinate()))
-    local range = playerPos:Get2DDistance(unit:GetCoordinate()) / 1000  -- In km
-    local alt = unit:GetAltitude() / 1000  -- In km
+    local rangeMeters = playerPos:Get2DDistance(unit:GetCoordinate())
+    local range, distUnit = self:FormatDistance(rangeMeters, playerKey)
+    local alt = unit:GetAltitude() / 1000  -- Keep altitude in km for brevity
     local threat = "cold"
-    if range * 1000 <= PILOT_INTUITION_CONFIG.threatHotRange then
+    if rangeMeters <= PILOT_INTUITION_CONFIG.threatHotRange then
         threat = "hot"
     end
     local groupSize = #unit:GetGroup():GetUnits()
     local sizeDesc = groupSize == 1 and "single" or (groupSize == 2 and "pair" or "flight of " .. groupSize)
 
-    MESSAGE:New(self:GetRandomMessage("airTargetDetected", {threat, bearing, range, alt, sizeDesc}), 10):ToClient(client)
+    MESSAGE:New(self:GetRandomMessage("airTargetDetected", {threat, bearing, range, distUnit, alt, sizeDesc}), 10):ToClient(client)
     playerData.lastMessageTime = now
 end
 
@@ -2183,14 +2317,23 @@ function PilotIntuition:ReportGroundTarget(group, playerUnit, client, placeMarke
     if now - self.lastMessageTime < PILOT_INTUITION_CONFIG.messageCooldown then return end
     if not PILOT_INTUITION_CONFIG.activeMessaging then return end
     local playerPos = playerUnit:GetCoordinate()
-    local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(group:GetCoordinate()))
-    local distance = playerPos:Get2DDistance(group:GetCoordinate()) / 1000  -- In km
+    local targetPos = group:GetCoordinate()
+    local bearing = playerPos:HeadingTo(targetPos)  -- Returns heading in degrees as number
+    
+    -- Ensure bearing is a valid number
+    if not bearing or type(bearing) ~= "number" then
+        bearing = 0  -- Fallback to 0 if bearing is invalid
+    end
+    
+    local distanceMeters = playerPos:Get2DDistance(targetPos)
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    local distance, unit = self:FormatDistance(distanceMeters, playerKey)
     local unitType = group:GetUnits()[1]:GetTypeName()
     local category = self:ClassifyGroundUnit(unitType)
     local groupSize = #group:GetUnits()
     local sizeDesc = groupSize == 1 and "single" or (groupSize <= 4 and "group" or "platoon")
 
-    MESSAGE:New(self:GetRandomMessage("groundTargetDetected", {category, sizeDesc, unitType, bearing, distance}), 10):ToClient(client)
+    MESSAGE:New(self:GetRandomMessage("groundTargetDetected", {category, sizeDesc, unitType, bearing, distance, unit}), 10):ToClient(client)
     self.lastMessageTime = now
 
     -- Place marker if requested
