@@ -34,6 +34,22 @@
 -- 4. The system initializes automatically on mission start. Players will see a welcome message and can access settings via the F10 menu.
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
+-- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
+PILOT_INTUITION_LOG_LEVEL = 2  -- Default to INFO level
+
+local function PILog(level, message)
+    if level <= PILOT_INTUITION_LOG_LEVEL then
+        env.info(message)
+    end
+end
+
+-- Log level constants
+local LOG_NONE = 0
+local LOG_ERROR = 1
+local LOG_INFO = 2
+local LOG_DEBUG = 3
+local LOG_TRACE = 4
+
 -- Global configuration table for settings
 PILOT_INTUITION_CONFIG = {
     airDetectionRange = 5000,  -- Meters (base range for air targets) (can be modified by formation and environment)
@@ -61,7 +77,7 @@ PILOT_INTUITION_CONFIG = {
     positionChangeThreshold = 45,  -- Degrees - trigger update if bandit moves this much
     maxMultiplier = 6,  -- Max detection multiplier to prevent excessive ranges
     summaryInterval = 120,  -- Seconds between scheduled summaries (0 to disable)
-    summaryCooldown = 30,  -- Minimum seconds between on-demand summaries
+    summaryCooldown = 5,  -- Minimum seconds between on-demand summaries
     activeMessaging = true,  -- Enable live alerts; false for on-demand only
     showGlobalMenu = true,  -- Enable global settings menu for players
     showWelcomeMessage = true,  -- Show welcome message to new players
@@ -70,6 +86,7 @@ PILOT_INTUITION_CONFIG = {
     headOnWarningRange = 150,  -- Meters for head-on warning
     closeFlyingMessageCooldown = 10,  -- Seconds between close flying messages
     enableAirScanning = true,  -- Enable scanning for air targets
+    enableGroundScanning = true,  -- Enable scanning for ground targets
 }
 
 -- Message table with variations for different types
@@ -137,6 +154,28 @@ PILOT_INTUITION_MESSAGES = {
         "Smooth moves! Close quarters flying.",
         "Damn, that's tight! Good flying.",
         "Holy shit, that's close! Nice one.",
+        "Whew, that was close! Good stick work.",
+        "You're glued to my wing! Excellent flying.",
+        "Tight as a drum! Keep it up.",
+        "Helluva formation! Tip to tip.",
+        "Smooth as silk! Close flying there.",
+        "Damn, pilot! That's some precision.",
+        "Whoa, easy on the throttle! Nice and close.",
+        "Impressive control! Wingtip distance.",
+        "You're right on my six... wait, formation! Good job.",
+        "Tight formation! That's how it's done.",
+        "Holy cow, that's close! Well done.",
+        "Nice touch! Close quarters.",
+        "You're flying like a pro! Tight formation.",
+        "Smooth operator! Tip-to-tip.",
+        "Damn fine flying! Close as can be.",
+        "Whoa there! That's some tight flying.",
+        "Impressive! You're practically in my cockpit.",
+        "Smooth sailing! Close formation.",
+        "Hell yeah, that's tight! Good work.",
+        "Easy tiger, but damn good flying.",
+        "You're a formation expert! Tip-to-tip.",
+        "Smooth moves, pilot! Close quarters.",
     },
     headOnWarning = {
         "Whew! That was close!",
@@ -191,6 +230,7 @@ PilotIntuition = {
     enabled = true,
     summaryScheduler = nil,
     lastDeepCleanup = 0,  -- For periodic deep cleanup
+    playerMenus = {},  -- Track created player menus to avoid duplicates
 }
 
 function PilotIntuition:GetRandomMessage(messageType, params)
@@ -209,65 +249,186 @@ function PilotIntuition:GetRandomMessage(messageType, params)
 end
 
 function PilotIntuition:New()
-    env.info("PilotIntuition: New called")
+    PILog(LOG_INFO, "PilotIntuition: System starting")
     local self = BASE:Inherit(self, BASE:New())
     self.players = {}
     self.trackedGroundTargets = {}
     self.lastMessageTime = timer.getTime()
+    self.playerMenus = {}  -- Clear cached menus on initialization
     self:SetupMenu()
+    self:WireEventHandlers()
     self:StartScheduler()
+    PILog(LOG_INFO, "PilotIntuition: System initialized")
     return self
 end
 
+-- Helper function to get current unit for a clientName
+function PilotIntuition:GetUnitForClient(clientName)
+    if not clientName then 
+        env.info("PilotIntuition: GetUnitForClient - no clientName provided")
+        return nil 
+    end
+    
+    env.info("PilotIntuition: GetUnitForClient looking for: " .. tostring(clientName))
+    
+    -- Try _DATABASE.CLIENTS first
+    if _DATABASE and _DATABASE.CLIENTS and _DATABASE.CLIENTS[clientName] then
+        local unitName = _DATABASE.CLIENTS[clientName].UnitName
+        env.info("PilotIntuition: Found in _DATABASE.CLIENTS, unitName: " .. tostring(unitName))
+        if unitName then
+            local unit = UNIT:FindByName(unitName)
+            if unit then
+                env.info("PilotIntuition: UNIT:FindByName succeeded, IsAlive: " .. tostring(unit:IsAlive()))
+                if unit:IsAlive() then
+                    return unit
+                end
+            else
+                env.info("PilotIntuition: UNIT:FindByName returned nil")
+            end
+        end
+    else
+        env.info("PilotIntuition: clientName not found in _DATABASE.CLIENTS")
+    end
+    
+    return nil
+end
+
+-- Helper function to get player data key from a unit (handles aliasing)
+function PilotIntuition:GetPlayerDataKey(playerUnit)
+    if not playerUnit then return nil end
+    
+    local unitName = playerUnit:GetName()
+    local playerName = playerUnit:GetPlayerName()
+    
+    -- Try unit name first (clientName from _DATABASE.CLIENTS)
+    if self.players[unitName] then
+        return unitName
+    end
+    
+    -- Try player name second (may be aliased to unit name)
+    if playerName and self.players[playerName] then
+        return playerName
+    end
+    
+    return nil
+end
+
+-- Helper function to get all active player units
+function PilotIntuition:GetActivePlayers()
+    local players = {}
+    local count = 0
+    
+    -- Method 1: Try DCS coalition.getPlayers()
+    for _, coalitionId in pairs({coalition.side.RED, coalition.side.BLUE, coalition.side.NEUTRAL}) do
+        local success, coalPlayers = pcall(coalition.getPlayers, coalitionId)
+        if success and coalPlayers then
+            for _, playerId in pairs(coalPlayers) do
+                if playerId and type(playerId) == "string" and playerId ~= "" then
+                    local success2, unit = pcall(Unit.getByName, playerId)
+                    if success2 and unit and unit:isExist() and unit:isActive() then
+                        local unitWrapper = UNIT:Find(unit)
+                        if unitWrapper then
+                            local playerName = unitWrapper:GetPlayerName() or unitWrapper:GetName()
+                            players[playerName] = unitWrapper
+                            count = count + 1
+                            env.info("PilotIntuition: Found player via coalition.getPlayers: " .. playerName)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Method 2: Try _DATABASE.CLIENTS
+    if _DATABASE and _DATABASE.CLIENTS then
+        local clientCount = 0
+        for clientName, clientData in pairs(_DATABASE.CLIENTS) do
+            clientCount = clientCount + 1
+            PILog(LOG_TRACE, "PilotIntuition: Checking _DATABASE.CLIENTS entry #" .. clientCount .. ": " .. tostring(clientName))
+            if clientData then
+                PILog(LOG_TRACE, "  - UnitName: " .. tostring(clientData.UnitName))
+            end
+            if not players[clientName] and clientData and clientData.UnitName then
+                local unit = UNIT:FindByName(clientData.UnitName)
+                PILog(LOG_TRACE, "  - UNIT:FindByName result: " .. tostring(unit))
+                if unit then
+                    PILog(LOG_TRACE, "  - Unit:IsAlive: " .. tostring(unit:IsAlive()))
+                end
+                if unit and unit:IsAlive() then
+                    players[clientName] = unit
+                    count = count + 1
+                    PILog(LOG_DEBUG, "PilotIntuition: Found player via _DATABASE.CLIENTS: " .. clientName)
+                end
+            end
+        end
+        PILog(LOG_DEBUG, "PilotIntuition: _DATABASE.CLIENTS had " .. clientCount .. " total entries")
+    else
+        PILog(LOG_ERROR, "PilotIntuition: _DATABASE.CLIENTS not available!")
+    end
+    
+    PILog(LOG_INFO, "PilotIntuition: GetActivePlayers found " .. count .. " players")
+    return players
+end
+
 function PilotIntuition:ScanTargets()
-    env.info("PilotIntuition: ScanTargets called")
+    PILog(LOG_DEBUG, "PilotIntuition: ScanTargets called")
     if not self.enabled then
         return
     end
     local startTime = timer.getTime()  -- Profiling start
 
-    local clients = SET_CLIENT:New():FilterActive():FilterOnce()
+    local activePlayers = self:GetActivePlayers()
     local activeClients = {}
     local activePlayerNames = {}
-    -- Build active client list and map for fast lookup
-    clients:ForEachClient(function(client)
-        if client and type(client.GetUnit) == "function" then
-            local unit = client:GetUnit()
-            if unit and unit:IsAlive() then
-                local playerName = unit:GetPlayerName() or unit:GetName()
-                local pos = unit:GetCoordinate()
-                activeClients[#activeClients + 1] = { client = client, unit = unit, name = playerName, pos = pos, coalition = unit:GetCoalition() }
-                activePlayerNames[playerName] = true
-                if not self.players[playerName] then
-                    self.players[playerName] = {
-                        trackedAirTargets = {},
-                        lastMessageTime = timer.getTime(),
-                        wingmenList = {},
-                        formationWarned = false,
-                        lastFormationChangeTime = 0,
-                        lastConclusionTime = 0,
-                        trackedGroundTargets = {},
-                        dogfightAssist = PILOT_INTUITION_CONFIG.dogfightAssistEnabled,
-                        lastDogfightAssistTime = 0,
-                        markerType = PILOT_INTUITION_CONFIG.markerType,
-                        lastSpeed = 0,
-                        primaryTarget = nil,
-                        lastPrimaryTargetBearing = nil,
-                        lastSummaryTime = 0,
-                        hasBeenWelcomed = false,
-                        lastComplimentTime = 0,
-                        lastHeadOnWarningTime = 0,
-                        enableAirScanning = PILOT_INTUITION_CONFIG.enableAirScanning,
-                        scannedGroundTargets = {},  -- List of recently scanned ground targets for selection
-                        cachedWingmen = 0,  -- Cached wingmen count
-                        lastWingmenUpdate = 0,
-                        previousWingmen = 0,  -- For formation change detection
-                        frequencyMultiplier = 1.0,  -- Per-player alert frequency: 1.0=normal, 2.0=quiet, 0.5=verbose
-                    }
-                end
+    
+    -- Build active client list from the players we found
+    for clientName, unit in pairs(activePlayers) do
+        if unit and unit:IsAlive() then
+            local client = unit:GetClient()
+            local pos = unit:GetCoordinate()
+            local actualPlayerName = unit:GetPlayerName() or unit:GetName()
+            activeClients[#activeClients + 1] = { client = client, unit = unit, name = clientName, pos = pos, coalition = unit:GetCoalition() }
+            activePlayerNames[clientName] = true
+            
+            -- Create player data if it doesn't exist (using clientName as primary key)
+            if not self.players[clientName] then
+                self.players[clientName] = {
+                    trackedAirTargets = {},
+                    lastMessageTime = timer.getTime(),
+                    wingmenList = {},
+                    formationWarned = false,
+                    lastFormationChangeTime = 0,
+                    lastConclusionTime = 0,
+                    trackedGroundTargets = {},
+                    dogfightAssist = PILOT_INTUITION_CONFIG.dogfightAssistEnabled,
+                    lastDogfightAssistTime = 0,
+                    markerType = PILOT_INTUITION_CONFIG.markerType,
+                    lastSpeed = 0,
+                    primaryTarget = nil,
+                    lastPrimaryTargetBearing = nil,
+                    lastSummaryTime = 0,
+                    hasBeenWelcomed = false,
+                    lastComplimentTime = 0,
+                    lastHeadOnWarningTime = 0,
+                    enableAirScanning = PILOT_INTUITION_CONFIG.enableAirScanning,
+                    enableGroundScanning = PILOT_INTUITION_CONFIG.enableGroundScanning,
+                    scannedGroundTargets = {},  -- List of recently scanned ground targets for selection
+                    cachedWingmen = 0,  -- Cached wingmen count
+                    lastWingmenUpdate = 0,
+                    previousWingmen = 0,  -- For formation change detection
+                    frequencyMultiplier = 1.0,  -- Per-player alert frequency: 1.0=normal, 2.0=quiet, 0.5=verbose
+                }
             end
+            
+            -- Menu creation now handled by Birth event only
         end
-    end)
+    end
+
+    -- If no active players, skip the scan
+    if #activeClients == 0 then
+        env.info("PilotIntuition: No active players, skipping scan")
+        return
+    end
 
     -- Cache wingmen for each player (updated every scan for simplicity)
     for _, info in ipairs(activeClients) do
@@ -340,6 +501,9 @@ function PilotIntuition:ScanTargets()
             if playerData.enableAirScanning then
                 self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
             end
+            if playerData.enableGroundScanning then
+                self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
+            end
             self:CheckCloseFlyingForPlayer(unit, playerData, client, activeClients)
         end
     end
@@ -359,7 +523,7 @@ function PilotIntuition:ScanTargets()
     end
 
     local endTime = timer.getTime()  -- Profiling end
-    env.info(string.format("PilotIntuition: ScanTargets completed in %.3f seconds", endTime - startTime))
+    PILog(LOG_DEBUG, string.format("PilotIntuition: ScanTargets completed in %.3f seconds", endTime - startTime))
 end
 
 function PilotIntuition:DeepCleanup()
@@ -388,96 +552,409 @@ end
 
 -- Setup the mission and per-player menus for pilot intuition toggles
 function PilotIntuition:SetupMenu()
-    -- Guard: Ensure MENU_MISSION exists
-    if not MENU_MISSION then
-        env.info("PilotIntuition: MENU_MISSION not found, skipping SetupMenu")
-        return
-    end
-
-    -- Create a top-level mission menu for toggles
-    local rootMenu = MENU_MISSION:New("WWII Pilot Intuition")
-    self.menu = rootMenu
-
-    -- Marker type choices
-    local markerMenu = MENU_MISSION:New("Marker Type", rootMenu)
-    local smokeMenu = MENU_MISSION:New("Smoke", markerMenu)
-    MENU_MISSION_COMMAND:New("Red", smokeMenu, self.MenuSetMarkerType, self, "smoke_red")
-    MENU_MISSION_COMMAND:New("Green", smokeMenu, self.MenuSetMarkerType, self, "smoke_green")
-    MENU_MISSION_COMMAND:New("Blue", smokeMenu, self.MenuSetMarkerType, self, "smoke_blue")
-    MENU_MISSION_COMMAND:New("White", smokeMenu, self.MenuSetMarkerType, self, "smoke_white")
-    local flareMenu = MENU_MISSION:New("Flare", markerMenu)
-    MENU_MISSION_COMMAND:New("Red", flareMenu, self.MenuSetMarkerType, self, "flare_red")
-    MENU_MISSION_COMMAND:New("Green", flareMenu, self.MenuSetMarkerType, self, "flare_green")
-    MENU_MISSION_COMMAND:New("White", flareMenu, self.MenuSetMarkerType, self, "flare_white")
-    MENU_MISSION_COMMAND:New("None", markerMenu, self.MenuSetMarkerType, self, "none")
-
-    -- Active messaging toggle
-    MENU_MISSION_COMMAND:New("Active Messaging On", rootMenu, self.MenuSetActiveMessaging, self, true)
-    MENU_MISSION_COMMAND:New("Active Messaging Off", rootMenu, self.MenuSetActiveMessaging, self, false)
-
-    -- Air scanning toggle
-    MENU_MISSION_COMMAND:New("Air Scanning On", rootMenu, self.MenuSetAirScanning, self, true)
-    MENU_MISSION_COMMAND:New("Air Scanning Off", rootMenu, self.MenuSetAirScanning, self, false)
-
-    -- Per-player menu group: create a settings node for each active player
-    self:SetupPlayerMenus()
-
-    -- schedule periodic update for player menus to catch new players
-    SCHEDULER:New(nil, self.SetupPlayerMenus, {self}, 1, 10)
-end
-function PilotIntuition:SetupPlayerMenus()
-    local clients = SET_CLIENT:New():FilterActive():FilterOnce()
-    clients:ForEachClient(function(client)
-        if client and type(client.GetUnit) == "function" then
-            local unit = client:GetUnit()
+    PILog(LOG_INFO, "PilotIntuition: SetupMenu called - creating menus for existing players")
+    
+    -- Create menus for any players already in the mission (e.g., mission editor start)
+    SCHEDULER:New(nil, function()
+        local activePlayers = self:GetActivePlayers()
+        for clientName, unit in pairs(activePlayers) do
             if unit and unit:IsAlive() then
-                local playerGroup = unit:GetGroup()
-                local playerName = unit:GetPlayerName() or unit:GetName()
-                local playerMenu = MENU_GROUP:New(playerGroup, 'Pilot Intuition')
-                -- create a short, non-spamming set of toggles for player
-                MENU_GROUP_COMMAND:New(playerGroup, "Dogfight Assist On", playerMenu, self.MenuSetPlayerDogfightAssist, self, unit, true)
-                MENU_GROUP_COMMAND:New(playerGroup, "Dogfight Assist Off", playerMenu, self.MenuSetPlayerDogfightAssist, self, unit, false)
-                -- also allow player to toggle markers themselves
-                local markerMenu = MENU_GROUP:New(playerGroup, "Marker Type", playerMenu)
-                local smokeMenu = MENU_GROUP:New(playerGroup, "Smoke", markerMenu)
-                MENU_GROUP_COMMAND:New(playerGroup, "Red", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_red")
-                MENU_GROUP_COMMAND:New(playerGroup, "Green", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_green")
-                MENU_GROUP_COMMAND:New(playerGroup, "Blue", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_blue")
-                MENU_GROUP_COMMAND:New(playerGroup, "White", smokeMenu, self.MenuSetPlayerMarker, self, unit, "smoke_white")
-                local flareMenu = MENU_GROUP:New(playerGroup, "Flare", markerMenu)
-                MENU_GROUP_COMMAND:New(playerGroup, "Red", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_red")
-                MENU_GROUP_COMMAND:New(playerGroup, "Green", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_green")
-                MENU_GROUP_COMMAND:New(playerGroup, "White", flareMenu, self.MenuSetPlayerMarker, self, unit, "flare_white")
-                MENU_GROUP_COMMAND:New(playerGroup, "None", markerMenu, self.MenuSetPlayerMarker, self, unit, "none")
-                -- Air scanning toggle
-                MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: On", playerMenu, self.MenuSetPlayerAirScanning, self, unit, true)
-                MENU_GROUP_COMMAND:New(playerGroup, "Air Scanning: Off", playerMenu, self.MenuSetPlayerAirScanning, self, unit, false)
-                -- Ground targeting on-demand
-                local groundMenu = MENU_GROUP:New(playerGroup, "Ground Targeting", playerMenu)
-                MENU_GROUP_COMMAND:New(playerGroup, "Scan for Ground Targets", groundMenu, self.MenuScanGroundTargets, self, unit)
-                local markMenu = MENU_GROUP:New(playerGroup, "Mark Target", groundMenu)
-                for i=1,5 do
-                    MENU_GROUP_COMMAND:New(playerGroup, "Target " .. i, markMenu, self.MenuMarkGroundTarget, self, unit, i)
+                local group = unit:GetGroup()
+                if group then
+                    local groupName = group:GetName()
+                    if not self.playerMenus[groupName] then
+                        PILog(LOG_INFO, "PilotIntuition: Creating menu for existing player group: " .. groupName)
+                        self.playerMenus[groupName] = self:BuildGroupMenus(group)
+                        MESSAGE:New("WWII Pilot Intuition active! Use F10 menu for settings.", 10):ToGroup(group)
+                    end
                 end
-                -- Alert frequency toggle
-                MENU_GROUP_COMMAND:New(playerGroup, "Alert Frequency: Normal", playerMenu, self.MenuSetPlayerAlertFrequency, self, unit, "normal")
-                MENU_GROUP_COMMAND:New(playerGroup, "Alert Frequency: Quiet", playerMenu, self.MenuSetPlayerAlertFrequency, self, unit, "quiet")
-                MENU_GROUP_COMMAND:New(playerGroup, "Alert Frequency: Verbose", playerMenu, self.MenuSetPlayerAlertFrequency, self, unit, "verbose")
-                -- Summary commands
-                MENU_GROUP_COMMAND:New(playerGroup, "Summary: Brief", playerMenu, self.MenuSendPlayerSummary, self, unit, "brief")
-                MENU_GROUP_COMMAND:New(playerGroup, "Summary: Detailed", playerMenu, self.MenuSendPlayerSummary, self, unit, "detailed")
             end
         end
+    end, {}, 2)  -- Wait 2 seconds for mission to fully load
+end
+
+-- BuildGroupMenus: Creates full menu tree for a player group (CTLD-style)
+function PilotIntuition:BuildGroupMenus(group)
+    env.info("PilotIntuition: BuildGroupMenus called for group: " .. group:GetName())
+    
+    -- Create the main menu for this group
+    local playerSubMenu = MENU_GROUP:New(group, "WWII Pilot Intuition")
+    
+    -- Get first unit in group for callbacks
+    local unit = group:GetUnit(1)
+    if not unit then
+        env.info("PilotIntuition: WARNING - No unit found in group")
+        return playerSubMenu
+    end
+    
+    -- Dogfight Assist submenu
+    local dogfightMenu = MENU_GROUP:New(group, "Dogfight Assist", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Enable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, "Disable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, false) end)
+    
+    -- Marker Type submenu
+    local markerMenu = MENU_GROUP:New(group, "Marker Type", playerSubMenu)
+    local smokeMenu = MENU_GROUP:New(group, "Smoke", markerMenu)
+    MENU_GROUP_COMMAND:New(group, "Red", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_red") end)
+    MENU_GROUP_COMMAND:New(group, "Green", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_green") end)
+    MENU_GROUP_COMMAND:New(group, "Blue", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_blue") end)
+    MENU_GROUP_COMMAND:New(group, "White", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_white") end)
+    local flareMenu = MENU_GROUP:New(group, "Flare", markerMenu)
+    MENU_GROUP_COMMAND:New(group, "Red", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_red") end)
+    MENU_GROUP_COMMAND:New(group, "Green", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_green") end)
+    MENU_GROUP_COMMAND:New(group, "White", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_white") end)
+    MENU_GROUP_COMMAND:New(group, "None", markerMenu, function() self:MenuSetPlayerMarker(unit, "none") end)
+    
+    -- Air scanning submenu
+    local airScanMenu = MENU_GROUP:New(group, "Air Scanning", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Enable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, "Disable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, false) end)
+    
+    -- Ground scanning submenu
+    local groundScanMenu = MENU_GROUP:New(group, "Ground Scanning", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Enable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, "Disable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, false) end)
+    
+    -- Ground targeting submenu
+    local groundMenu = MENU_GROUP:New(group, "Ground Targeting", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Scan for Targets", groundMenu, function() self:MenuScanGroundTargets(unit) end)
+    local markMenu = MENU_GROUP:New(group, "Mark Target", groundMenu)
+    for i=1,5 do
+        local captureIndex = i
+        MENU_GROUP_COMMAND:New(group, "Target " .. i, markMenu, function() self:MenuMarkGroundTarget(unit, captureIndex) end)
+    end
+    
+    -- Alert frequency submenu
+    local freqMenu = MENU_GROUP:New(group, "Alert Frequency", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Normal", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "normal") end)
+    MENU_GROUP_COMMAND:New(group, "Quiet", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
+    MENU_GROUP_COMMAND:New(group, "Verbose", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
+    
+    -- Admin Settings submenu
+    local adminMenu = MENU_GROUP:New(group, "Admin Settings & Player Guides", playerSubMenu)
+    
+    -- Player Guide submenu
+    local guideMenu = MENU_GROUP:New(group, "Player Guide", adminMenu)
+    MENU_GROUP_COMMAND:New(group, "System Overview", guideMenu, function() self:ShowGuideOverview(group) end)
+    MENU_GROUP_COMMAND:New(group, "Detection Ranges", guideMenu, function() self:ShowGuideRanges(group) end)
+    MENU_GROUP_COMMAND:New(group, "Formation Flying", guideMenu, function() self:ShowGuideFormation(group) end)
+    MENU_GROUP_COMMAND:New(group, "Environment Effects", guideMenu, function() self:ShowGuideEnvironment(group) end)
+    
+    -- Log level submenu (global setting)
+    local logMenu = MENU_GROUP:New(group, "Log Level", adminMenu)
+    MENU_GROUP_COMMAND:New(group, "Error Only", logMenu, function() self:SetLogLevel(1, group) end)
+    MENU_GROUP_COMMAND:New(group, "Info (Default)", logMenu, function() self:SetLogLevel(2, group) end)
+    MENU_GROUP_COMMAND:New(group, "Debug", logMenu, function() self:SetLogLevel(3, group) end)
+    MENU_GROUP_COMMAND:New(group, "Trace (Verbose)", logMenu, function() self:SetLogLevel(4, group) end)
+    
+    -- Summary submenu
+    local summaryMenu = MENU_GROUP:New(group, "Summary", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
+    MENU_GROUP_COMMAND:New(group, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
+    
+    PILog(LOG_INFO, "PilotIntuition: Menu created successfully for group " .. group:GetName())
+    return playerSubMenu
+end
+
+function PilotIntuition:SetLogLevel(level, group)
+    PILOT_INTUITION_LOG_LEVEL = level
+    local labels = {"None", "Error", "Info", "Debug", "Trace"}
+    MESSAGE:New("Log level set to: " .. (labels[level + 1] or "Unknown"), 5):ToGroup(group)
+    PILog(LOG_INFO, "PilotIntuition: Log level changed to " .. level)
+end
+
+-- Player Guide functions
+function PilotIntuition:ShowGuideOverview(group)
+    local msg = "WWII PILOT INTUITION - SYSTEM OVERVIEW\n\n"
+    msg = msg .. "This system simulates WWII-era pilot awareness without modern radar or labels.\n\n"
+    msg = msg .. "KEY FEATURES:\n"
+    msg = msg .. "• Air & Ground target detection based on visual ranges\n"
+    msg = msg .. "• Formation flying SIGNIFICANTLY boosts detection ranges\n"
+    msg = msg .. "• Dogfight assistance (merge warnings, tail alerts, energy state)\n"
+    msg = msg .. "• Optional smoke/flare markers for spotted targets\n"
+    msg = msg .. "• Environmental effects (night, weather reduce ranges)\n\n"
+    msg = msg .. "Use F10 menu to customize settings per pilot.\n"
+    msg = msg .. "Check other guide sections for detailed mechanics."
+    MESSAGE:New(msg, 20):ToGroup(group)
+end
+
+function PilotIntuition:ShowGuideRanges(group)
+    local airRange = PILOT_INTUITION_CONFIG.airDetectionRange
+    local groundRange = PILOT_INTUITION_CONFIG.groundDetectionRange
+    local maxMult = PILOT_INTUITION_CONFIG.maxMultiplier
+    local formRange = PILOT_INTUITION_CONFIG.formationRange
+    
+    local msg = "DETECTION RANGES\n\n"
+    msg = msg .. "BASE RANGES (Solo Flight):\n"
+    msg = msg .. "• Air Targets: " .. airRange .. "m (~" .. math.floor(airRange / 1852 * 10) / 10 .. "nm)\n"
+    msg = msg .. "• Ground Targets: " .. groundRange .. "m (~" .. math.floor(groundRange / 1852 * 10) / 10 .. "nm)\n\n"
+    msg = msg .. "FORMATION MULTIPLIERS:\n"
+    msg = msg .. "Solo: 1.0x (base range)\n"
+    msg = msg .. "2-ship: 2.0x (double range)\n"
+    msg = msg .. "3-ship: 3.0x (triple range)\n"
+    msg = msg .. "4-ship: 4.0x (quadruple range)\n"
+    if maxMult >= 5 then
+        msg = msg .. "5-ship: 5.0x\n"
+    end
+    if maxMult >= 6 then
+        msg = msg .. "6+ ship: " .. maxMult .. ".0x (maximum)\n\n"
+    else
+        msg = msg .. maxMult .. "+ ship: " .. maxMult .. ".0x (maximum)\n\n"
+    end
+    msg = msg .. "EXAMPLE (Air Detection):\n"
+    local solo = math.floor(airRange / 1000)
+    local twoship = math.floor(airRange * 2 / 1000)
+    local fourship = math.floor(airRange * math.min(4, maxMult) / 1000)
+    msg = msg .. "Solo: " .. solo .. "km | 2-ship: " .. twoship .. "km | 4-ship: " .. fourship .. "km\n\n"
+    msg = msg .. "Formation = wingmen within " .. formRange .. "m (~" .. math.floor(formRange / 1852 * 10) / 10 .. "nm)"
+    MESSAGE:New(msg, 25):ToGroup(group)
+end
+
+function PilotIntuition:ShowGuideFormation(group)
+    local formRange = PILOT_INTUITION_CONFIG.formationRange
+    local maxMult = PILOT_INTUITION_CONFIG.maxMultiplier
+    local minWingmen = PILOT_INTUITION_CONFIG.minFormationWingmen
+    
+    local msg = "FORMATION FLYING BENEFITS\n\n"
+    msg = msg .. "Formation flying is CRITICAL for situational awareness!\n\n"
+    msg = msg .. "FORMATION REQUIREMENTS:\n"
+    msg = msg .. "• Wingmen must be within " .. formRange .. "m (~" .. math.floor(formRange / 1852 * 10) / 10 .. "nm)\n"
+    msg = msg .. "• Same coalition (friendlies only)\n"
+    msg = msg .. "• Aircraft must be alive and player-controlled\n"
+    msg = msg .. "• Minimum wingmen for warnings: " .. minWingmen .. "\n\n"
+    msg = msg .. "DETECTION BOOST:\n"
+    msg = msg .. "Each additional wingman adds 1.0x to your detection range (up to " .. maxMult .. ".0x max).\n\n"
+    msg = msg .. "TACTICAL ADVANTAGE:\n"
+    local fourShipMult = math.min(4, maxMult)
+    msg = msg .. "• 4-ship formation sees " .. fourShipMult .. "x further than solo\n"
+    msg = msg .. "• Spot bandits before they spot you\n"
+    msg = msg .. "• Better ground reconnaissance coverage\n"
+    MESSAGE:New(msg, 25):ToGroup(group)
+end
+
+function PilotIntuition:ShowGuideEnvironment(group)
+    local nightMult = PILOT_INTUITION_CONFIG.nightDetectionMultiplier
+    local weatherMult = PILOT_INTUITION_CONFIG.badWeatherMultiplier
+    local mergeRange = PILOT_INTUITION_CONFIG.mergeRange
+    local tailRange = PILOT_INTUITION_CONFIG.tailWarningRange
+    local headOnRange = PILOT_INTUITION_CONFIG.headOnRange
+    local beamRange = PILOT_INTUITION_CONFIG.beamRange
+    local combinedMult = nightMult * weatherMult
+    
+    local msg = "ENVIRONMENT EFFECTS\n\n"
+    msg = msg .. "Detection ranges are affected by conditions:\n\n"
+    msg = msg .. "NIGHT TIME:\n"
+    msg = msg .. "• " .. (nightMult * 100) .. "% detection range\n"
+    msg = msg .. "• Harder to spot targets in darkness\n"
+    msg = msg .. "• Formation flying still helps!\n\n"
+    msg = msg .. "BAD WEATHER:\n"
+    msg = msg .. "• " .. (weatherMult * 100) .. "% detection range\n"
+    msg = msg .. "• Rain, fog, clouds reduce visibility\n"
+    msg = msg .. "• Stacks with night penalty\n\n"
+    msg = msg .. "COMBINED EFFECTS:\n"
+    msg = msg .. "Night + Bad Weather = ~" .. math.floor(combinedMult * 100) .. "% of normal range.\n\n"
+    msg = msg .. "DOGFIGHT RANGES:\n"
+    msg = msg .. "• Merge: " .. mergeRange .. "m\n"
+    msg = msg .. "• Tail Warning: " .. tailRange .. "m\n"
+    msg = msg .. "• Head-On: " .. headOnRange .. "m\n"
+    msg = msg .. "• Beam: " .. beamRange .. "m\n\n"
+    msg = msg .. "These ranges are NOT affected by environment - they're visual merge distances."
+    MESSAGE:New(msg, 30):ToGroup(group)
+end
+
+-- WireEventHandlers: Set up Birth event handler (CTLD-style)
+function PilotIntuition:WireEventHandlers()
+    PILog(LOG_INFO, "PilotIntuition: Wiring Birth event handler")
+    
+    local selfref = self
+    
+    EVENT:New():HandleEvent(EVENTS.Birth, function(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        if not unit or not unit:IsAlive() then return end
+        
+        local group = unit:GetGroup()
+        if not group then return end
+        local groupName = group:GetName()
+        
+        -- Simple check: if menu exists for this group, skip
+        if selfref.playerMenus[groupName] then 
+            PILog(LOG_DEBUG, "PilotIntuition: Menu already exists for group: " .. groupName)
+            return 
+        end
+        
+        PILog(LOG_INFO, "PilotIntuition: Birth event - creating menu for group: " .. groupName)
+        selfref.playerMenus[groupName] = selfref:BuildGroupMenus(group)
+        
+        -- Send welcome message to group
+        MESSAGE:New("WWII Pilot Intuition active! Use F10 menu for settings.", 10):ToGroup(group)
     end)
+    
+    -- Keep shot event handler for other functionality
+    EVENT:New():HandleEvent(EVENTS.Shot, function(EventData) 
+        selfref:OnPlayerShot(EventData)
+        selfref:OnShotFired(EventData)
+    end)
+    
+    PILog(LOG_INFO, "PilotIntuition: Event handlers wired")
+end
+
+function PilotIntuition:OnPlayerEnterUnit(EventData)
+    env.info("PilotIntuition: OnPlayerEnterUnit event triggered")
+    if EventData and EventData.IniUnit then
+        local unit = EventData.IniUnit
+        if unit and unit:IsAlive() then
+            env.info("PilotIntuition: Player entered unit: " .. tostring(unit:GetName()))
+            -- Small delay to ensure unit is fully initialized
+            SCHEDULER:New(nil, function()
+                self:SetupPlayerMenus()
+            end, {}, 2)
+        end
+    end
+end
+
+function PilotIntuition:SetupPlayerMenus()
+    env.info("PilotIntuition: SetupPlayerMenus called")
+    
+    local activePlayers = self:GetActivePlayers()
+    local playersFound = 0
+    
+    for clientName, unit in pairs(activePlayers) do
+        playersFound = playersFound + 1
+        env.info("PilotIntuition: Processing player: " .. tostring(clientName))
+        
+        if unit and unit:IsAlive() then
+            env.info("PilotIntuition: Unit is alive: " .. tostring(unit:GetName()))
+            
+            -- Get the actual player name for aliasing
+            local actualPlayerName = unit:GetPlayerName() or unit:GetName()
+            
+            -- Ensure player data exists (may have been created by ScanTargets)
+            if not self.players[clientName] then
+                self.players[clientName] = {
+                    trackedAirTargets = {},
+                    lastMessageTime = timer.getTime(),
+                    wingmenList = {},
+                    formationWarned = false,
+                    lastFormationChangeTime = 0,
+                    lastConclusionTime = 0,
+                    trackedGroundTargets = {},
+                    dogfightAssist = PILOT_INTUITION_CONFIG.dogfightAssistEnabled,
+                    lastDogfightAssistTime = 0,
+                    markerType = PILOT_INTUITION_CONFIG.markerType,
+                    lastSpeed = 0,
+                    primaryTarget = nil,
+                    lastPrimaryTargetBearing = nil,
+                    lastSummaryTime = 0,
+                    hasBeenWelcomed = false,
+                    lastComplimentTime = 0,
+                    lastHeadOnWarningTime = 0,
+                    enableAirScanning = PILOT_INTUITION_CONFIG.enableAirScanning,
+                    enableGroundScanning = PILOT_INTUITION_CONFIG.enableGroundScanning,
+                    scannedGroundTargets = {},
+                    cachedWingmen = 0,
+                    lastWingmenUpdate = 0,
+                    previousWingmen = 0,
+                    frequencyMultiplier = 1.0,
+                }
+            end
+            
+            -- Create alias for actual player name
+            if actualPlayerName ~= clientName then
+                env.info("PilotIntuition: Creating player alias in SetupPlayerMenus: '" .. actualPlayerName .. "' -> '" .. clientName .. "'")
+                self.players[actualPlayerName] = self.players[clientName]
+            end
+            
+            local playerGroup = unit:GetGroup()
+            if not playerGroup then 
+                env.info("PilotIntuition: No group found for unit " .. tostring(unit:GetName()))
+            else
+                -- Skip if menu already created for this player
+                if self.playerMenus[clientName] then
+                    env.info("PilotIntuition: Menu already exists for " .. clientName)
+                else
+                    env.info("PilotIntuition: Creating menu for player " .. clientName)
+                    
+                    -- Create the main menu for this player's group
+                    local playerSubMenu = MENU_GROUP:New(playerGroup, "WWII Pilot Intuition")
+                    local currentGroupName = playerGroup:GetName()
+                    self.playerMenus[clientName] = {
+                        menu = playerSubMenu,
+                        groupName = currentGroupName
+                    }
+                    
+                    -- Dogfight Assist submenu
+                    local dogfightMenu = MENU_GROUP:New(playerGroup, "Dogfight Assist", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Enable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, true) end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Disable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, false) end)
+                    
+                    -- Marker Type submenu
+                    local markerMenu = MENU_GROUP:New(playerGroup, "Marker Type", playerSubMenu)
+                    local smokeMenu = MENU_GROUP:New(playerGroup, "Smoke", markerMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Red", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_red") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Green", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_green") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Blue", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_blue") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "White", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_white") end)
+                    local flareMenu = MENU_GROUP:New(playerGroup, "Flare", markerMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Red", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_red") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Green", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_green") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "White", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_white") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "None", markerMenu, function() self:MenuSetPlayerMarker(unit, "none") end)
+                    
+                    -- Air scanning submenu
+                    local airScanMenu = MENU_GROUP:New(playerGroup, "Air Scanning", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Enable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, true) end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Disable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, false) end)
+                    
+                    -- Ground scanning submenu
+                    local groundScanMenu = MENU_GROUP:New(playerGroup, "Ground Scanning", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Enable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, true) end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Disable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, false) end)
+                    
+                    -- Ground targeting submenu
+                    local groundMenu = MENU_GROUP:New(playerGroup, "Ground Targeting", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Scan for Targets", groundMenu, function() self:MenuScanGroundTargets(unit) end)
+                    local markMenu = MENU_GROUP:New(playerGroup, "Mark Target", groundMenu)
+                    for i=1,5 do
+                        MENU_GROUP_COMMAND:New(playerGroup, "Target " .. i, markMenu, function() self:MenuMarkGroundTarget(unit, i) end)
+                    end
+                    
+                    -- Alert frequency submenu
+                    local freqMenu = MENU_GROUP:New(playerGroup, "Alert Frequency", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Normal", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "normal") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Quiet", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Verbose", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
+                    
+                    -- Summary submenu
+                    local summaryMenu = MENU_GROUP:New(playerGroup, "Summary", playerSubMenu)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
+                    MENU_GROUP_COMMAND:New(playerGroup, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
+                    
+                    env.info("PilotIntuition: Menu created successfully for " .. clientName)
+                end
+            end
+        end
+    end
+    
+    env.info("PilotIntuition: SetupPlayerMenus completed, processed " .. playersFound .. " players")
 end
 
 function PilotIntuition:MenuSetPlayerMarker(playerUnit, markerType)
-    env.info("PilotIntuition: MenuSetPlayerMarker called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(markerType))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    env.info("====== PilotIntuition: MenuSetPlayerMarker CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+        env.info("PilotIntuition: playerUnit:GetPlayerName() = " .. tostring(playerUnit:GetPlayerName()))
+    end
+    env.info("PilotIntuition: markerType = " .. tostring(markerType))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
     -- store as player pref only - not global config
-    if self.players[playerName] then
-        self.players[playerName].markerType = markerType
+    if playerKey and self.players[playerKey] then
+        self.players[playerKey].markerType = markerType
         local client = playerUnit:GetClient()
         if client then
             local niceType = markerType:gsub("_", " "):gsub("(%w)(%w*)", function(first, rest) return first:upper() .. rest:lower() end)
@@ -495,25 +972,51 @@ function PilotIntuition:MenuSetMarkerType(type)
 end
 
 function PilotIntuition:MenuSetPlayerDogfightAssist(playerUnit, onoff)
-    env.info("PilotIntuition: MenuSetPlayerDogfightAssist called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(onoff))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    if self.players[playerName] then
-        self.players[playerName].dogfightAssist = onoff
+    env.info("====== PilotIntuition: MenuSetPlayerDogfightAssist CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: onoff = " .. tostring(onoff))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: Looking for player data with key: " .. tostring(playerKey))
+    env.info("PilotIntuition: Available players: " .. table.concat(self:GetPlayerKeys(), ", "))
+    
+    if playerKey and self.players[playerKey] then
+        env.info("PilotIntuition: Found player data, setting dogfightAssist to " .. tostring(onoff))
+        self.players[playerKey].dogfightAssist = onoff
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
+        env.info("PilotIntuition: Getting client: " .. tostring(client))
         if client then
+            env.info("PilotIntuition: Sending message to client")
             MESSAGE:New(self:GetRandomMessage("dogfightAssistToggle", {status}), 10):ToClient(client)
+        else
+            env.info("PilotIntuition: ERROR - Could not get client")
         end
+    else
+        env.info("PilotIntuition: ERROR - Player data not found for: " .. tostring(playerKey))
     end
 end
 
 function PilotIntuition:MenuSetPlayerAirScanning(playerUnit, onoff)
-    env.info("PilotIntuition: MenuSetPlayerAirScanning called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(onoff))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    if self.players[playerName] then
-        self.players[playerName].enableAirScanning = onoff
+    env.info("====== PilotIntuition: MenuSetPlayerAirScanning CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: onoff = " .. tostring(onoff))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    if playerKey and self.players[playerKey] then
+        self.players[playerKey].enableAirScanning = onoff
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
         if client then
@@ -523,11 +1026,19 @@ function PilotIntuition:MenuSetPlayerAirScanning(playerUnit, onoff)
 end
 
 function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
-    env.info("PilotIntuition: MenuSetPlayerGroundScanning called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(onoff))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    if self.players[playerName] then
-        self.players[playerName].enableGroundScanning = onoff
+    env.info("====== PilotIntuition: MenuSetPlayerGroundScanning CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: onoff = " .. tostring(onoff))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    if playerKey and self.players[playerKey] then
+        self.players[playerKey].enableGroundScanning = onoff
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
         if client then
@@ -537,10 +1048,18 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
 end
 
 function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
-    env.info("PilotIntuition: MenuSetPlayerAlertFrequency called for " .. tostring(playerUnit and playerUnit:GetName()) .. " with " .. tostring(mode))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    if self.players[playerName] then
+    env.info("====== PilotIntuition: MenuSetPlayerAlertFrequency CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: mode = " .. tostring(mode))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    if playerKey and self.players[playerKey] then
         local multiplier
         if mode == "normal" then
             multiplier = 1.0
@@ -551,7 +1070,7 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
         else
             multiplier = 1.0  -- Default
         end
-        self.players[playerName].frequencyMultiplier = multiplier
+        self.players[playerKey].frequencyMultiplier = multiplier
         local client = playerUnit:GetClient()
         if client then
             MESSAGE:New(self:GetRandomMessage("alertFrequencyToggle", {mode}), 10):ToClient(client)
@@ -560,25 +1079,50 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
 end
 
 function PilotIntuition:MenuScanGroundTargets(playerUnit)
-    env.info("PilotIntuition: MenuScanGroundTargets called for " .. tostring(playerUnit and playerUnit:GetName()))
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-    local playerData = self.players[playerName]
-    if not playerData then return end
+    env.info("====== PilotIntuition: MenuScanGroundTargets CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
+        return 
+    end
+    
+    local playerPos = playerUnit:GetCoordinate()
+    if not playerPos then
+        env.info("PilotIntuition: ERROR - Cannot get player position")
+        return
+    end
+    
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    local playerData = playerKey and self.players[playerKey]
+    if not playerData then 
+        env.info("PilotIntuition: ERROR - No player data found for " .. tostring(playerKey))
+        return 
+    end
+    
     local client = playerUnit:GetClient()
-    if not client then return end
+    if not client then 
+        env.info("PilotIntuition: ERROR - No client found")
+        return 
+    end
 
     -- Collect enemy ground groups within range
-    local playerPos = playerUnit:GetCoordinate()
     local playerCoalition = playerUnit:GetCoalition()
     local enemyCoalition = (playerCoalition == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
     local allGroups = coalition.getGroups(enemyCoalition)
     local enemyGroundGroups = {}
-    for _, group in ipairs(allGroups) do
-        if group:IsAlive() and (group:GetCategory() == Group.Category.GROUND or group:GetCategory() == Group.Category.SHIP) then
-            local distance = playerPos:Get2DDistance(group:GetCoordinate())
-            if distance <= PILOT_INTUITION_CONFIG.groundDetectionRange then
-                table.insert(enemyGroundGroups, {group = group, distance = distance})
+    for _, dcsGroup in ipairs(allGroups) do
+        -- Wrap DCS group object with Moose GROUP
+        local group = GROUP:Find(dcsGroup)
+        if group and group:IsAlive() and (dcsGroup:getCategory() == Group.Category.GROUND or dcsGroup:getCategory() == Group.Category.SHIP) then
+            local groupCoord = group:GetCoordinate()
+            if groupCoord then
+                local distance = playerPos:Get2DDistance(groupCoord)
+                if distance <= PILOT_INTUITION_CONFIG.groundDetectionRange then
+                    table.insert(enemyGroundGroups, {group = group, distance = distance})
+                end
             end
         end
     end
@@ -614,8 +1158,16 @@ function PilotIntuition:MenuScanGroundTargets(playerUnit)
 end
 
 function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
-    env.info("PilotIntuition: MenuMarkGroundTarget called for " .. tostring(playerUnit and playerUnit:GetName()) .. " index " .. tostring(index))
-    if not playerUnit then return end
+    env.info("====== PilotIntuition: MenuMarkGroundTarget CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: index = " .. tostring(index))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
     local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
     local playerData = self.players[playerName]
     if not playerData then return end
@@ -724,23 +1276,45 @@ function PilotIntuition:GetPlayerSummary(playerName, detailLevel)
 end
 
 function PilotIntuition:SendPlayerSummary(playerUnit, detailLevel)
-    if not playerUnit then return end
-    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    env.info("PilotIntuition: SendPlayerSummary called with detailLevel: " .. tostring(detailLevel))
+    if not playerUnit then 
+        env.info("PilotIntuition: No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: Player key from unit: " .. tostring(playerKey))
     local client = playerUnit:GetClient()
-    if not self.players[playerName] or not client then return end
+    if not client then
+        env.info("PilotIntuition: Could not get client for player")
+        return
+    end
+    if not playerKey or not self.players[playerKey] then 
+        env.info("PilotIntuition: Player data not found for: " .. tostring(playerKey))
+        env.info("PilotIntuition: Available players: " .. table.concat(self:GetPlayerKeys(), ", "))
+        return 
+    end
     local now = timer.getTime()
-    local data = self.players[playerName]
+    local data = self.players[playerKey]
     if data.lastSummaryTime and (now - data.lastSummaryTime) < (PILOT_INTUITION_CONFIG.summaryCooldown or 30) then
         MESSAGE:New(self:GetRandomMessage("summaryCooldown"), 10):ToClient(client)
         return
     end
-    local summary = self:GetPlayerSummary(playerName, detailLevel)
+    local summary = self:GetPlayerSummary(playerKey, detailLevel)
+    env.info("PilotIntuition: Summary generated: " .. tostring(summary))
     if summary and summary ~= "" then
         MESSAGE:New(summary, 10):ToClient(client)
         data.lastSummaryTime = now
     else
         MESSAGE:New(self:GetRandomMessage("noThreats"), 10):ToClient(client)
     end
+end
+
+function PilotIntuition:GetPlayerKeys()
+    local keys = {}
+    for k, _ in pairs(self.players) do
+        table.insert(keys, k)
+    end
+    return keys
 end
 
 function PilotIntuition:SendScheduledSummaries()
@@ -1173,6 +1747,7 @@ end
 function PilotIntuition:OnPlayerShot(EventData)
     if not self.enabled then return end
     local playerUnit = EventData.IniUnit
+    if not playerUnit then return end
     local client = playerUnit:GetClient()
     if client then
         local unitName = playerUnit:GetName()
@@ -1272,10 +1847,6 @@ function PilotIntuition:OnShotFired(EventData)
 end
 
 -- Initialize the Pilot Intuition system
+PILog(LOG_INFO, "====== PILOT INTUITION SYSTEM STARTING ======")
 local pilotIntuitionSystem = PilotIntuition:New()
-
--- Event handler for shots
-EVENT:New():HandleEvent(EVENTS.Shot, function(EventData) 
-    pilotIntuitionSystem:OnPlayerShot(EventData)
-    pilotIntuitionSystem:OnShotFired(EventData)
-end)
+PILog(LOG_INFO, "====== PILOT INTUITION SYSTEM INITIALIZED ======")
