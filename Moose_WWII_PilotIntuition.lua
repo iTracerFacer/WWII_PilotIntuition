@@ -35,7 +35,7 @@
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 2  -- Default to INFO level
+PILOT_INTUITION_LOG_LEVEL = 3  -- Default to DEBUG level
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then
@@ -52,8 +52,8 @@ local LOG_TRACE = 4
 
 -- Global configuration table for settings
 PILOT_INTUITION_CONFIG = {
-    airDetectionRange = 5000,  -- Meters (base range for air targets) (can be modified by formation and environment)
-    groundDetectionRange = 3000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
+    airDetectionRange = 10000,  -- Meters (base range for air targets) (can be modified by formation and environment)
+    groundDetectionRange = 5000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
     messageCooldown = 10,  -- Seconds between messages
     markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
     markerDuration = 300,  -- Seconds for marker visibility (dcs default can't be changed, so this is just for reference)
@@ -61,10 +61,19 @@ PILOT_INTUITION_CONFIG = {
     threatColdRange = 5000,  -- Meters for "cold" threat
     scanInterval = 5,  -- Seconds between scans
     mergeRange = 500,  -- Meters for merge detection
+    highMergeAltitude = 500,  -- Meters altitude difference for "high merge"
+    lowMergeAltitude = 500,  -- Meters altitude difference for "low merge"
     tailWarningRange = 1000,  -- Meters for tail warnings
     headOnRange = 1000,  -- Meters for head-on detection
     beamRange = 1500,  -- Meters for beam aspect detection
+    separatingRange = 2000,  -- Meters - if opening past this after merge, call "separating"
     multipleBanditsRange = 2000,  -- Meters for multiple bandits detection
+    multipleBanditsRange = 2000,  -- Meters for multiple bandits detection
+    multipleBanditsWarningCooldown = 300,  -- Seconds between "Multiple bandits in vicinity!" warnings (5 minutes)
+    maxThreatDisplay = 3,  -- Maximum number of threats to display in multi-bandit tactical picture (most threatening first)
+    combatIntensityThreshold = 3,  -- Number of bandits to trigger "high intensity" mode (increases cooldowns)
+    combatIntensityCooldownMultiplier = 1.5,  -- Multiply dogfight assist cooldown by this during high intensity combat
+    suppressFormationInCombat = true,  -- Suppress formation join/leave messages when engaged with bandits
     formationRange = 1000,  -- Meters for considering players in formation
     minFormationWingmen = 1,  -- Minimum wingmen for formation integrity warnings
     nightDetectionMultiplier = 0.5,  -- Detection range multiplier at night
@@ -77,7 +86,7 @@ PILOT_INTUITION_CONFIG = {
     positionChangeThreshold = 45,  -- Degrees - trigger update if bandit moves this much
     maxMultiplier = 6,  -- Max detection multiplier to prevent excessive ranges
     summaryInterval = 120,  -- Seconds between scheduled summaries (0 to disable)
-    summaryCooldown = 5,  -- Minimum seconds between on-demand summaries
+    summaryCooldown = 2,  -- Minimum seconds between on-demand summaries
     activeMessaging = true,  -- Enable live alerts; false for on-demand only
     showGlobalMenu = true,  -- Enable global settings menu for players
     showWelcomeMessage = true,  -- Show welcome message to new players
@@ -87,6 +96,11 @@ PILOT_INTUITION_CONFIG = {
     closeFlyingMessageCooldown = 10,  -- Seconds between close flying messages
     enableAirScanning = true,  -- Enable scanning for air targets
     enableGroundScanning = true,  -- Enable scanning for ground targets
+    illuminationCooldown = 30,  -- Seconds between illumination flare drops (simulates reload time)
+    illuminationAltitude = 500,  -- Meters - altitude offset above target for illumination flares
+    illuminationFlaresDefault = 3,  -- Number of illumination flares per sortie
+    countAIWingmen = true,  -- Count AI units in same group as wingmen for formation bonus (false = players only count as wingmen)
+    aiWingmenMultiplier = 1.0,  -- Multiplier for AI wingmen (0.5 = half credit, 1.0 = full credit)
 }
 
 -- Message table with variations for different types
@@ -395,6 +409,7 @@ function PilotIntuition:ScanTargets()
                 self.players[clientName] = {
                     trackedAirTargets = {},
                     lastMessageTime = timer.getTime(),
+                    lastDogfightTime = 0,  -- For multi-bandit tactical picture cooldown
                     wingmenList = {},
                     formationWarned = false,
                     lastFormationChangeTime = 0,
@@ -414,9 +429,13 @@ function PilotIntuition:ScanTargets()
                     enableGroundScanning = PILOT_INTUITION_CONFIG.enableGroundScanning,
                     scannedGroundTargets = {},  -- List of recently scanned ground targets for selection
                     cachedWingmen = 0,  -- Cached wingmen count
+                    lastIlluminationTime = 0,  -- Cooldown tracking for illumination flares
+                    illuminationFlares = PILOT_INTUITION_CONFIG.illuminationFlaresDefault,  -- Remaining illumination flares
                     lastWingmenUpdate = 0,
                     previousWingmen = 0,  -- For formation change detection
                     frequencyMultiplier = 1.0,  -- Per-player alert frequency: 1.0=normal, 2.0=quiet, 0.5=verbose
+                    threateningBandits = {},  -- Reusable table for detected threats
+                    lastMultipleBanditsWarningTime = 0,  -- Cooldown for "Multiple bandits in vicinity!" message
                 }
             end
             
@@ -436,6 +455,8 @@ function PilotIntuition:ScanTargets()
         local playerData = self.players[playerName]
         if playerData then
             playerData.cachedWingmen = 0
+            
+            -- Count other players in formation
             for _, otherInfo in ipairs(activeClients) do
                 local u = otherInfo.unit
                 if u and u:IsAlive() and u:GetCoalition() == info.unit:GetCoalition() and u:GetName() ~= info.unit:GetName() then
@@ -445,6 +466,47 @@ function PilotIntuition:ScanTargets()
                     end
                 end
             end
+            
+            -- Count AI wingmen if enabled
+            if PILOT_INTUITION_CONFIG.countAIWingmen then
+                PILog(LOG_INFO, "PilotIntuition: Checking AI wingmen for player " .. playerName)
+                
+                -- Get all friendly units in formation range
+                local playerCoalition = info.unit:GetCoalition()
+                local allFriendlyUnits = coalition.getGroups(playerCoalition)
+                local aiCount = 0
+                
+                for _, dcsGroup in ipairs(allFriendlyUnits) do
+                    local mooseGroup = GROUP:Find(dcsGroup)
+                    if mooseGroup and mooseGroup:IsAlive() then
+                        local groupUnits = mooseGroup:GetUnits()
+                        for _, aiUnit in pairs(groupUnits) do
+                            if aiUnit and aiUnit:IsAlive() and aiUnit:GetName() ~= info.unit:GetName() then
+                                -- Check distance first (cheaper than GetPlayerName)
+                                local aiCoord = aiUnit:GetCoordinate()
+                                if aiCoord then
+                                    local dist = info.pos:Get2DDistance(aiCoord)
+                                    if dist <= PILOT_INTUITION_CONFIG.formationRange then
+                                        -- Now check if it's AI (not a player)
+                                        local playerName = aiUnit:GetPlayerName()
+                                        local isAI = not playerName or playerName == ""
+                                        if isAI then
+                                            -- Add AI with multiplier (can be fractional)
+                                            playerData.cachedWingmen = playerData.cachedWingmen + PILOT_INTUITION_CONFIG.aiWingmenMultiplier
+                                            aiCount = aiCount + 1
+                                            PILog(LOG_INFO, "PilotIntuition: Added AI wingman " .. aiUnit:GetName() .. " at " .. math.floor(dist) .. "m, total: " .. playerData.cachedWingmen)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                PILog(LOG_INFO, "PilotIntuition: Total AI wingmen in formation: " .. aiCount)
+            end
+            
+            PILog(LOG_INFO, "PilotIntuition: Final wingmen count for " .. playerName .. ": " .. playerData.cachedWingmen)
             playerData.lastWingmenUpdate = timer.getTime()
         end
     end
@@ -469,24 +531,35 @@ function PilotIntuition:ScanTargets()
     local enemyAirByCoalition = {}
     enemyAirByCoalition[coalition.side.BLUE] = {}
     enemyAirByCoalition[coalition.side.RED] = {}
-    local allEnemyUnits = SET_UNIT:New():FilterActive():FilterCategories("plane")
-    allEnemyUnits:ForEachUnit(function(u)
-        local c = u:GetCoalition()
-        if c == coalition.side.BLUE or c == coalition.side.RED then
-            enemyAirByCoalition[c][#enemyAirByCoalition[c] + 1] = u
+    PILog(LOG_INFO, "PilotIntuition: Building enemy air unit list from _DATABASE.UNITS...")
+    local enemyCount = 0
+    
+    -- Iterate directly through Moose's already-populated database
+    for unitName, unitObj in pairs(_DATABASE.UNITS) do
+        if unitObj and unitObj:IsAlive() and unitObj:IsAir() then
+            local c = unitObj:GetCoalition()
+            if c == coalition.side.BLUE or c == coalition.side.RED then
+                enemyAirByCoalition[c][#enemyAirByCoalition[c] + 1] = unitObj
+                enemyCount = enemyCount + 1
+                PILog(LOG_INFO, "PilotIntuition: Found enemy air unit: " .. unitName .. " (coalition " .. c .. ")")
+            end
         end
-    end)
+    end
+    PILog(LOG_INFO, "PilotIntuition: Total enemy air units found: " .. enemyCount)
 
     local enemyGroundByCoalition = {}
     enemyGroundByCoalition[coalition.side.BLUE] = {}
     enemyGroundByCoalition[coalition.side.RED] = {}
-    local allEnemyGroups = SET_GROUP:New():FilterActive():FilterCategories("ground")
-    allEnemyGroups:ForEachGroup(function(g)
-        local c = g:GetCoalition()
-        if c == coalition.side.BLUE or c == coalition.side.RED then
-            enemyGroundByCoalition[c][#enemyGroundByCoalition[c] + 1] = g
+    
+    -- Iterate directly through Moose's already-populated database for ground groups
+    for groupName, groupObj in pairs(_DATABASE.GROUPS) do
+        if groupObj and groupObj:IsAlive() and groupObj:IsGround() then
+            local c = groupObj:GetCoalition()
+            if c == coalition.side.BLUE or c == coalition.side.RED then
+                enemyGroundByCoalition[c][#enemyGroundByCoalition[c] + 1] = groupObj
+            end
         end
-    end)
+    end
 
     -- Now scan per active client
     for _, info in ipairs(activeClients) do
@@ -498,6 +571,9 @@ function PilotIntuition:ScanTargets()
             -- Determine enemy lists for this player
             local playerCoal = unit:GetCoalition()
             local enemyCoal = (playerCoal == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
+            PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " coalition: " .. playerCoal .. ", enemy coalition: " .. enemyCoal)
+            PILog(LOG_INFO, "PilotIntuition: Air scanning enabled: " .. tostring(playerData.enableAirScanning))
+            PILog(LOG_INFO, "PilotIntuition: Enemy air units for this player: " .. #(enemyAirByCoalition[enemyCoal] or {}))
             if playerData.enableAirScanning then
                 self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
             end
@@ -622,6 +698,17 @@ function PilotIntuition:BuildGroupMenus(group)
     for i=1,5 do
         local captureIndex = i
         MENU_GROUP_COMMAND:New(group, "Target " .. i, markMenu, function() self:MenuMarkGroundTarget(unit, captureIndex) end)
+    end
+    
+    -- Illumination submenu with dynamic count display
+    local playerName = unit:GetPlayerName() or unit:GetName()
+    local flareCount = (self.players[playerName] and self.players[playerName].illuminationFlares) or PILOT_INTUITION_CONFIG.illuminationFlaresDefault
+    local illuMenu = MENU_GROUP:New(group, "Illumination (" .. flareCount .. " left)", playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, "Drop at My Position", illuMenu, function() self:MenuDropIlluminationAtPlayer(unit) end)
+    local illuTargetMenu = MENU_GROUP:New(group, "Drop on Target", illuMenu)
+    for i=1,5 do
+        local captureIndex = i
+        MENU_GROUP_COMMAND:New(group, "Target " .. i, illuTargetMenu, function() self:MenuDropIlluminationOnTarget(unit, captureIndex) end)
     end
     
     -- Alert frequency submenu
@@ -796,6 +883,35 @@ function PilotIntuition:WireEventHandlers()
         selfref:OnShotFired(EventData)
     end)
     
+    -- Landing event handler for rearming illumination flares
+    EVENT:New():HandleEvent(EVENTS.Land, function(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        if not unit or not unit:IsAlive() then return end
+        
+        -- Check if it's a player unit
+        local playerName = unit:GetPlayerName()
+        if not playerName then return end
+        
+        local playerData = selfref.players[playerName]
+        if not playerData then return end
+        
+        -- Check if landed at a friendly airbase
+        local place = EventData.Place
+        if place and place:getCoalition() == unit:GetCoalition() then
+            -- Rearm illumination flares
+            local prevCount = playerData.illuminationFlares or 0
+            playerData.illuminationFlares = PILOT_INTUITION_CONFIG.illuminationFlaresDefault
+            
+            local client = unit:GetClient()
+            if client and prevCount < PILOT_INTUITION_CONFIG.illuminationFlaresDefault then
+                MESSAGE:New("Illumination flares rearmed: " .. PILOT_INTUITION_CONFIG.illuminationFlaresDefault .. " available.", 10):ToClient(client)
+            end
+            
+            PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " rearmed illumination flares at friendly airbase")
+        end
+    end)
+    
     PILog(LOG_INFO, "PilotIntuition: Event handlers wired")
 end
 
@@ -834,6 +950,7 @@ function PilotIntuition:SetupPlayerMenus()
                 self.players[clientName] = {
                     trackedAirTargets = {},
                     lastMessageTime = timer.getTime(),
+                    lastDogfightTime = 0,  -- For multi-bandit tactical picture cooldown
                     wingmenList = {},
                     formationWarned = false,
                     lastFormationChangeTime = 0,
@@ -856,6 +973,7 @@ function PilotIntuition:SetupPlayerMenus()
                     lastWingmenUpdate = 0,
                     previousWingmen = 0,
                     frequencyMultiplier = 1.0,
+                    threateningBandits = {},  -- Reusable table for detected threats
                 }
             end
             
@@ -1186,6 +1304,118 @@ function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
     MESSAGE:New("Marked Target " .. index .. ".", 10):ToClient(client)
 end
 
+function PilotIntuition:MenuDropIlluminationAtPlayer(playerUnit)
+    if not playerUnit or not playerUnit:IsAlive() then return end
+    
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    local playerData = self.players[playerName]
+    if not playerData then return end
+    
+    local client = playerUnit:GetClient()
+    if not client then return end
+    
+    -- Check if player has flares remaining
+    if (playerData.illuminationFlares or 0) <= 0 then
+        MESSAGE:New("No illumination flares remaining. Land at a friendly airbase to rearm.", 10):ToClient(client)
+        return
+    end
+    
+    -- Check cooldown
+    local now = timer.getTime()
+    local timeSinceLast = now - (playerData.lastIlluminationTime or 0)
+    if timeSinceLast < PILOT_INTUITION_CONFIG.illuminationCooldown then
+        local remaining = math.ceil(PILOT_INTUITION_CONFIG.illuminationCooldown - timeSinceLast)
+        MESSAGE:New("Illumination not ready. Wait " .. remaining .. " seconds.", 5):ToClient(client)
+        return
+    end
+    
+    -- Drop illumination flare at player position with altitude offset
+    local playerPos = playerUnit:GetCoordinate()
+    PILog(LOG_INFO, "PilotIntuition: Player position: " .. playerPos:ToStringLLDMS())
+    
+    -- Get altitude and add offset
+    local currentAlt = playerPos:GetAltitude()
+    PILog(LOG_INFO, "PilotIntuition: Current altitude: " .. currentAlt .. "m")
+    
+    -- Create new coordinate at higher altitude
+    local illuAlt = currentAlt + PILOT_INTUITION_CONFIG.illuminationAltitude
+    local illuPos = playerPos:SetAltitude(illuAlt)
+    PILog(LOG_INFO, "PilotIntuition: Illumination altitude: " .. illuAlt .. "m")
+    
+    -- Try to drop illumination bomb
+    PILog(LOG_INFO, "PilotIntuition: Attempting to drop illumination bomb")
+    illuPos:IlluminationBomb()
+    PILog(LOG_INFO, "PilotIntuition: IlluminationBomb() called successfully")
+    
+    -- Decrement flare count
+    playerData.illuminationFlares = playerData.illuminationFlares - 1
+    playerData.lastIlluminationTime = now
+    
+    MESSAGE:New("Illumination flare dropped at your position. (" .. playerData.illuminationFlares .. " remaining)", 10):ToClient(client)
+    PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " dropped illumination at own position. " .. playerData.illuminationFlares .. " flares remaining")
+end
+
+function PilotIntuition:MenuDropIlluminationOnTarget(playerUnit, index)
+    if not playerUnit or not playerUnit:IsAlive() then return end
+    
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    local playerData = self.players[playerName]
+    if not playerData then return end
+    
+    local client = playerUnit:GetClient()
+    if not client then return end
+    
+    -- Check if player has flares remaining
+    if (playerData.illuminationFlares or 0) <= 0 then
+        MESSAGE:New("No illumination flares remaining. Land at a friendly airbase to rearm.", 10):ToClient(client)
+        return
+    end
+    
+    -- Check cooldown
+    local now = timer.getTime()
+    local timeSinceLast = now - (playerData.lastIlluminationTime or 0)
+    if timeSinceLast < PILOT_INTUITION_CONFIG.illuminationCooldown then
+        local remaining = math.ceil(PILOT_INTUITION_CONFIG.illuminationCooldown - timeSinceLast)
+        MESSAGE:New("Illumination not ready. Wait " .. remaining .. " seconds.", 5):ToClient(client)
+        return
+    end
+    
+    -- Get scanned target
+    local scanned = playerData.scannedGroundTargets or {}
+    local group = scanned[index]
+    if not group or not group:IsAlive() then
+        MESSAGE:New("Target " .. index .. " not available.", 10):ToClient(client)
+        return
+    end
+    
+    -- Drop illumination flare over target with altitude offset
+    local targetPos = group:GetCoordinate()
+    PILog(LOG_INFO, "PilotIntuition: Target position: " .. targetPos:ToStringLLDMS())
+    
+    -- Get altitude and add offset
+    local targetAlt = targetPos:GetAltitude()
+    PILog(LOG_INFO, "PilotIntuition: Target altitude: " .. targetAlt .. "m")
+    
+    -- Create new coordinate at higher altitude
+    local illuAlt = targetAlt + PILOT_INTUITION_CONFIG.illuminationAltitude
+    local illuPos = targetPos:SetAltitude(illuAlt)
+    PILog(LOG_INFO, "PilotIntuition: Illumination altitude: " .. illuAlt .. "m")
+    
+    -- Try to drop illumination bomb
+    PILog(LOG_INFO, "PilotIntuition: Attempting to drop illumination bomb on target")
+    illuPos:IlluminationBomb()
+    PILog(LOG_INFO, "PilotIntuition: IlluminationBomb() called successfully")
+    
+    -- Decrement flare count
+    playerData.illuminationFlares = playerData.illuminationFlares - 1
+    playerData.lastIlluminationTime = now
+    
+    local bearing = playerUnit:GetCoordinate():GetAngleDegrees(playerUnit:GetCoordinate():GetDirectionVec3(targetPos))
+    local distance = playerUnit:GetCoordinate():Get2DDistance(targetPos) / 1000
+    MESSAGE:New(string.format("Illumination flare dropped on Target %d (%.0f°, %.1fkm). (%d remaining)", index, bearing, distance, playerData.illuminationFlares), 10):ToClient(client)
+    PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " dropped illumination on target " .. index .. ". " .. playerData.illuminationFlares .. " flares remaining")
+end
+
 function PilotIntuition:MenuSetActiveMessaging(onoff)
     env.info("PilotIntuition: MenuSetActiveMessaging called with " .. tostring(onoff))
     PILOT_INTUITION_CONFIG.activeMessaging = onoff
@@ -1235,44 +1465,171 @@ function PilotIntuition:BroadcastMessageToAll(text)
     env.info("PilotIntuition: Broadcasted to all with duration 10")
 end
 
-function PilotIntuition:GetPlayerSummary(playerName, detailLevel)
+function PilotIntuition:GetPlayerSummary(playerName, detailLevel, playerUnit)
     local data = self.players[playerName]
     if not data then return nil end
-    local summaryParts = {}
-    -- Count bandits
-    local banditCount = 0
-    local closestDist = math.huge
-    local closestDesc = nil
+    
+    -- Get player position for bearing calculations
+    local playerPos = nil
+    local playerHeading = 0
+    if playerUnit and playerUnit:IsAlive() then
+        playerPos = playerUnit:GetCoordinate()
+        playerHeading = math.deg(playerUnit:GetHeading())
+    end
+    
+    -- Collect air threats with details
+    local airThreats = {}
     for id, t in pairs(data.trackedAirTargets or {}) do
         if t.unit and t.unit:IsAlive() then
-            banditCount = banditCount + 1
-            local d = t.lastRange or 0
-            if d < closestDist then
-                closestDist = d
-                closestDesc = t.unit:GetTypeName() or id
+            local distance = t.lastRange or 0
+            local bearing = 0
+            local relativeBearing = 0
+            local threat = "UNKNOWN"
+            
+            if playerPos then
+                bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(t.unit:GetCoordinate()))
+                relativeBearing = (bearing - playerHeading + 360) % 360
+                
+                -- Determine threat level
+                if distance < PILOT_INTUITION_CONFIG.threatHotRange then
+                    threat = "HOT"
+                elseif distance < PILOT_INTUITION_CONFIG.threatColdRange then
+                    threat = "COLD"
+                else
+                    threat = "FAR"
+                end
             end
+            
+            table.insert(airThreats, {
+                name = t.unit:GetTypeName() or "Unknown",
+                bearing = bearing,
+                distance = distance,
+                altitude = t.unit:GetAltitude() or 0,
+                threat = threat
+            })
         end
     end
-    if banditCount > 0 then
-        table.insert(summaryParts, string.format("Bandits: %d", banditCount))
-        if closestDesc and detailLevel == "detailed" then
-            table.insert(summaryParts, string.format("Closest: %s (%.0fm)", closestDesc, closestDist))
+    
+    -- Sort air threats by distance (closest first)
+    table.sort(airThreats, function(a, b) return a.distance < b.distance end)
+    
+    -- Collect ground threats with details
+    local groundThreats = {}
+    for id, g in pairs(data.trackedGroundTargets or {}) do
+        if g and g:IsAlive() then
+            local gPos = g:GetCoordinate()
+            local distance = 0
+            local bearing = 0
+            local category = "Ground"
+            
+            if playerPos and gPos then
+                distance = playerPos:Get2DDistance(gPos)
+                bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(gPos))
+            end
+            
+            -- Classify ground unit
+            local firstUnit = g:GetUnit(1)
+            if firstUnit then
+                local unitType = firstUnit:GetTypeName() or ""
+                category = self:ClassifyGroundUnit(unitType)
+            end
+            
+            table.insert(groundThreats, {
+                name = g:GetName() or "Unknown",
+                category = category,
+                bearing = bearing,
+                distance = distance
+            })
         end
     end
-    -- Ground targets
-    local gcount = 0
-    for id, _ in pairs(data.trackedGroundTargets or {}) do gcount = gcount + 1 end
-    if gcount > 0 then
-        table.insert(summaryParts, string.format("Ground: %d groups", gcount))
+    
+    -- Sort ground threats by distance
+    table.sort(groundThreats, function(a, b) return a.distance < b.distance end)
+    
+    -- Build summary based on detail level
+    if detailLevel == "brief" then
+        -- Brief: Quick tactical overview
+        local parts = {}
+        
+        if #airThreats > 0 then
+            local closest = airThreats[1]
+            table.insert(parts, string.format("%d bandit%s (closest: %s @ %.1fkm %s)", 
+                #airThreats, 
+                #airThreats > 1 and "s" or "",
+                closest.name, 
+                closest.distance / 1000, 
+                closest.threat))
+        end
+        
+        if #groundThreats > 0 then
+            table.insert(parts, string.format("%d ground group%s", #groundThreats, #groundThreats > 1 and "s" or ""))
+        end
+        
+        -- Formation status
+        local wingmen = data.cachedWingmen or 0
+        if wingmen > 0 then
+            local mult = (wingmen > 0) and (2 * wingmen) or 1
+            if mult > PILOT_INTUITION_CONFIG.maxMultiplier then mult = PILOT_INTUITION_CONFIG.maxMultiplier end
+            local envMult = self:GetDetectionMultiplier()
+            local airRange = math.floor((PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult) / 1000)
+            local groundRange = math.floor((PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult) / 1000)
+            table.insert(parts, string.format("Formation: %d wingmen (detect: %dkm air/%dkm gnd)", wingmen, airRange, groundRange))
+        else
+            table.insert(parts, "Solo (reduced detection)")
+        end
+        
+        if #parts == 0 then
+            return nil
+        end
+        
+        return table.concat(parts, " | ")
+        
+    else
+        -- Detailed: Full tactical situation report
+        local lines = {}
+        table.insert(lines, "=== TACTICAL SITREP ===")
+        
+        -- Air threats section
+        if #airThreats > 0 then
+            table.insert(lines, "\nAIR THREATS:")
+            for i, threat in ipairs(airThreats) do
+                local angels = math.floor(threat.altitude * 3.28084 / 1000)  -- Convert to thousands of feet
+                table.insert(lines, string.format("  %d. %s @ %03d°, %.1fkm, angels %d (%s)", 
+                    i, threat.name, math.floor(threat.bearing), threat.distance / 1000, angels, threat.threat))
+            end
+        else
+            table.insert(lines, "\nAIR THREATS: None")
+        end
+        
+        -- Ground threats section
+        if #groundThreats > 0 then
+            table.insert(lines, "\nGROUND THREATS:")
+            for i, threat in ipairs(groundThreats) do
+                table.insert(lines, string.format("  %d. %s @ %03d°, %.1fkm", 
+                    i, threat.category, math.floor(threat.bearing), threat.distance / 1000))
+            end
+        else
+            table.insert(lines, "\nGROUND THREATS: None")
+        end
+        
+        -- Formation and detection status
+        local wingmen = data.cachedWingmen or 0
+        local mult = (wingmen > 0) and (2 * wingmen) or 1
+        if mult > PILOT_INTUITION_CONFIG.maxMultiplier then mult = PILOT_INTUITION_CONFIG.maxMultiplier end
+        local envMult = self:GetDetectionMultiplier()
+        local airRange = math.floor((PILOT_INTUITION_CONFIG.airDetectionRange * mult * envMult) / 1000)
+        local groundRange = math.floor((PILOT_INTUITION_CONFIG.groundDetectionRange * mult * envMult) / 1000)
+        
+        table.insert(lines, "\nFORMATION:")
+        if wingmen > 0 then
+            table.insert(lines, string.format("  Wingmen: %d (multiplier: x%d)", wingmen, mult))
+        else
+            table.insert(lines, "  Status: Solo flight")
+        end
+        table.insert(lines, string.format("  Detection: %dkm air, %dkm ground", airRange, groundRange))
+        
+        return table.concat(lines, "\n")
     end
-    -- Dogfight & formation status
-    if data.dogfightAssist then table.insert(summaryParts, "DF assist: ON") else table.insert(summaryParts, "DF assist: OFF") end
-    if #data.wingmenList > 0 then table.insert(summaryParts, "Wingmen: " .. #data.wingmenList) end
-    -- Settings
-    if detailLevel == "detailed" then
-        table.insert(summaryParts, string.format("Marker: %s", data.markerType or "none"))
-    end
-    return table.concat(summaryParts, " | ")
 end
 
 function PilotIntuition:SendPlayerSummary(playerUnit, detailLevel)
@@ -1295,14 +1652,16 @@ function PilotIntuition:SendPlayerSummary(playerUnit, detailLevel)
     end
     local now = timer.getTime()
     local data = self.players[playerKey]
-    if data.lastSummaryTime and (now - data.lastSummaryTime) < (PILOT_INTUITION_CONFIG.summaryCooldown or 30) then
-        MESSAGE:New(self:GetRandomMessage("summaryCooldown"), 10):ToClient(client)
+    if data.lastSummaryTime and (now - data.lastSummaryTime) < (PILOT_INTUITION_CONFIG.summaryCooldown or 2) then
+        MESSAGE:New(self:GetRandomMessage("summaryCooldown"), 5):ToClient(client)
         return
     end
-    local summary = self:GetPlayerSummary(playerKey, detailLevel)
+    local summary = self:GetPlayerSummary(playerKey, detailLevel, playerUnit)
     env.info("PilotIntuition: Summary generated: " .. tostring(summary))
     if summary and summary ~= "" then
-        MESSAGE:New(summary, 10):ToClient(client)
+        -- Use longer duration for detailed reports
+        local duration = (detailLevel == "detailed") and 30 or 15
+        MESSAGE:New(summary, duration):ToClient(client)
         data.lastSummaryTime = now
     else
         MESSAGE:New(self:GetRandomMessage("noThreats"), 10):ToClient(client)
@@ -1354,25 +1713,48 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     local envMult = self:GetDetectionMultiplier()
     local detectionRange = PILOT_INTUITION_CONFIG.airDetectionRange * multiplier * envMult
 
-    -- Notify formation changes
+    -- Notify formation changes (suppress during active combat if configured)
     local previousWingmen = playerData.previousWingmen or 0
     local now = timer.getTime()
-    if (now - playerData.lastFormationChangeTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
+    PILog(LOG_DEBUG, "PilotIntuition: Formation check - previous: " .. previousWingmen .. ", current: " .. wingmen .. ", cached: " .. playerData.cachedWingmen)
+    
+    -- Check if player is in active combat (has engaged bandits within hot range recently)
+    local inCombat = false
+    if PILOT_INTUITION_CONFIG.suppressFormationInCombat then
+        for _, data in pairs(playerData.trackedAirTargets) do
+            if data.engaged and (now - (data.lastEngagedTime or 0)) < 30 then
+                inCombat = true
+                break
+            end
+        end
+    end
+    
+    if not inCombat and (now - playerData.lastFormationChangeTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
         local newWingmen = playerData.cachedWingmen
         local newMultiplier = (newWingmen > 0) and (2 * newWingmen) or 1
         local newAirRange = math.floor(PILOT_INTUITION_CONFIG.airDetectionRange * newMultiplier * envMult)
         local newGroundRange = math.floor(PILOT_INTUITION_CONFIG.groundDetectionRange * newMultiplier * envMult)
         
+        PILog(LOG_DEBUG, "PilotIntuition: Formation change check - new: " .. newWingmen .. ", prev: " .. previousWingmen .. ", activeMessaging: " .. tostring(PILOT_INTUITION_CONFIG.activeMessaging))
+        
         if newWingmen > previousWingmen then
+            PILog(LOG_INFO, "PilotIntuition: Formation joined - sending message")
             if PILOT_INTUITION_CONFIG.activeMessaging then
                 MESSAGE:New(self:GetRandomMessage("formationJoin", {"wingman", newAirRange, newGroundRange}), 10):ToClient(client)
             end
             playerData.lastFormationChangeTime = now
         elseif newWingmen < previousWingmen then
+            PILog(LOG_INFO, "PilotIntuition: Formation left - sending message")
             if PILOT_INTUITION_CONFIG.activeMessaging then
                 MESSAGE:New(self:GetRandomMessage("formationLeave", {"wingman", newAirRange, newGroundRange}), 10):ToClient(client)
             end
             playerData.lastFormationChangeTime = now
+        end
+    else
+        if inCombat then
+            PILog(LOG_DEBUG, "PilotIntuition: Formation change suppressed - player in combat")
+        else
+            PILog(LOG_DEBUG, "PilotIntuition: Formation change message on cooldown")
         end
     end
     playerData.previousWingmen = playerData.cachedWingmen
@@ -1393,6 +1775,9 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     -- Prune dead or out-of-range air targets
     for id, data in pairs(playerData.trackedAirTargets) do
         if not data.unit:IsAlive() or playerPos:Get2DDistance(data.unit:GetCoordinate()) > detectionRange then
+            -- Explicitly nil out sub-fields before removing to help GC
+            data.unit = nil
+            data.banditName = nil
             playerData.trackedAirTargets[id] = nil
         end
     end
@@ -1400,6 +1785,13 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     local banditCount = 0
     local closestUnit = nil
     local minDistance = math.huge
+    -- Reuse existing threateningBandits table to reduce GC pressure
+    local threateningBandits = playerData.threateningBandits or {}
+    -- Clear the table (faster than creating new one)
+    for i = #threateningBandits, 1, -1 do
+        threateningBandits[i] = nil
+    end
+    
     for _, unit in ipairs(enemyAirUnits or {}) do
         local distance = playerPos:Get2DDistance(unit:GetCoordinate())
         if distance <= detectionRange then
@@ -1408,6 +1800,7 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 minDistance = distance
                 closestUnit = unit
             end
+            
             local targetID = unit:GetName()
             local now = timer.getTime()
             local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(unit:GetCoordinate()))
@@ -1416,7 +1809,27 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
             relativeBearing = (relativeBearing % 360 + 360) % 360  -- Normalize to 0-360
 
             if not playerData.trackedAirTargets[targetID] then
-                playerData.trackedAirTargets[targetID] = { unit = unit, engaged = false, lastRange = distance, lastTime = now, wasHot = false, lastRelativeBearing = relativeBearing, lastEngagedTime = 0 }
+                local banditName = unit:GetPlayerName() or unit:GetName()
+                playerData.trackedAirTargets[targetID] = { unit = unit, engaged = false, lastRange = distance, lastTime = now, wasHot = false, lastRelativeBearing = relativeBearing, lastEngagedTime = 0, banditName = banditName }
+                
+                -- Safety: Limit tracked targets to prevent memory bloat in long missions (keep 50 most recent)
+                local trackedCount = 0
+                for _ in pairs(playerData.trackedAirTargets) do trackedCount = trackedCount + 1 end
+                if trackedCount > 50 then
+                    -- Remove oldest non-engaged target
+                    local oldestID, oldestTime = nil, math.huge
+                    for tid, tdata in pairs(playerData.trackedAirTargets) do
+                        if not tdata.engaged and tdata.lastTime < oldestTime then
+                            oldestTime = tdata.lastTime
+                            oldestID = tid
+                        end
+                    end
+                    if oldestID then
+                        playerData.trackedAirTargets[oldestID].unit = nil
+                        playerData.trackedAirTargets[oldestID].banditName = nil
+                        playerData.trackedAirTargets[oldestID] = nil
+                    end
+                end
             else
                 playerData.trackedAirTargets[targetID].lastRange = playerData.trackedAirTargets[targetID].lastRange or distance
                 playerData.trackedAirTargets[targetID].lastTime = playerData.trackedAirTargets[targetID].lastTime or now
@@ -1436,54 +1849,215 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
             -- Reset engaged status after 2 minutes of no engagement or if bandit is out of range
             if data.engaged and ((now - data.lastEngagedTime) > 120 or distance > PILOT_INTUITION_CONFIG.airDetectionRange) then
                 data.engaged = false
-                if (now - playerData.lastConclusionTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
+                -- Only report "dogfight concluded" if the bandit was actually hot at some point (actual engagement)
+                if data.wasHot and (now - playerData.lastConclusionTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
                     if PILOT_INTUITION_CONFIG.activeMessaging then
-                        MESSAGE:New(self:GetRandomMessage("dogfightConcluded"), 10):ToClient(client)
+                        local banditName = data.banditName or "bandit"
+                        local msg = string.format("%s escaped!", banditName)
+                        MESSAGE:New(msg, 10):ToClient(client)
                     end
                     playerData.lastConclusionTime = now
                 end
             end
 
             if not data.engaged then
-                -- Check for dogfight situations (for all, but report only for closest)
+                -- Calculate altitude information
+                local playerAlt = playerUnit:GetAltitude()
+                local banditAlt = unit:GetAltitude()
+                local altDelta = banditAlt - playerAlt
+                
+                -- Check for dogfight situations
                 local onTail = relativeBearing > 150 and relativeBearing < 210
                 local headOn = relativeBearing < 30 or relativeBearing > 330
                 local beam = (relativeBearing > 60 and relativeBearing < 120) or (relativeBearing > 240 and relativeBearing < 300)
-                local overshoot = lastRelativeBearing < 90 and relativeBearing > 270
+                local overshoot = distance < PILOT_INTUITION_CONFIG.mergeRange and lastRelativeBearing < 90 and relativeBearing > 270 and not closing
+                
+                -- High/Low merge detection
+                local highMerge = distance < PILOT_INTUITION_CONFIG.mergeRange and closing and altDelta > PILOT_INTUITION_CONFIG.highMergeAltitude
+                local lowMerge = distance < PILOT_INTUITION_CONFIG.mergeRange and closing and altDelta < -PILOT_INTUITION_CONFIG.lowMergeAltitude
+                local coAltMerge = distance < PILOT_INTUITION_CONFIG.mergeRange and closing and math.abs(altDelta) < 200
+                
+                -- Separation after being hot
+                local separating = wasHot and distance > PILOT_INTUITION_CONFIG.separatingRange and not closing
 
-                if distance < PILOT_INTUITION_CONFIG.mergeRange and closing then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Merging bandit!")
-                elseif onTail and distance < PILOT_INTUITION_CONFIG.tailWarningRange then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Tail warning!")
-                elseif headOn and distance < PILOT_INTUITION_CONFIG.headOnRange then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Head-on bandit!")
-                elseif beam and distance < PILOT_INTUITION_CONFIG.beamRange then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Beam bandit!")
-                elseif wasHot and distance > PILOT_INTUITION_CONFIG.threatHotRange and not closing then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Bandit breaking off!")
-                elseif overshoot then
-                    self:ReportDogfight(unit, playerPos, playerData, client, "Bandit overshot!")
+                -- Build threat descriptor for ALL detected bandits
+                local threatType = nil
+                local threatDetail = nil
+                
+                -- Determine threat level based on distance/closure
+                local threatLevel = "cold"
+                if distance <= PILOT_INTUITION_CONFIG.threatHotRange then
+                    threatLevel = "hot"
+                elseif distance <= PILOT_INTUITION_CONFIG.threatColdRange then
+                    threatLevel = "cold"
+                else
+                    threatLevel = "distant"
                 end
+                
+                -- Check for specific tactical situations (high priority)
+                if highMerge then
+                    threatType = "high merge"
+                    threatDetail = string.format("%.0fm above", altDelta)
+                elseif lowMerge then
+                    threatType = "low merge"
+                    threatDetail = string.format("%.0fm below", math.abs(altDelta))
+                elseif coAltMerge then
+                    threatType = "co-alt merge"
+                elseif onTail and distance < PILOT_INTUITION_CONFIG.tailWarningRange then
+                    if altDelta > 200 then
+                        threatType = "tail high"
+                    elseif altDelta < -200 then
+                        threatType = "tail low"
+                    else
+                        threatType = "tail"
+                    end
+                elseif headOn and distance < PILOT_INTUITION_CONFIG.headOnRange then
+                    threatType = "head-on"
+                    if math.abs(altDelta) > 200 then
+                        threatDetail = string.format("alt %.0f", altDelta)
+                    end
+                elseif beam and distance < PILOT_INTUITION_CONFIG.beamRange then
+                    threatType = "beam"
+                    local side = (relativeBearing > 180) and "left" or "right"
+                    threatDetail = side
+                elseif separating then
+                    threatType = "separating"
+                elseif overshoot then
+                    threatType = "overshot"
+                else
+                    -- Generic aspect-based description for distant contacts
+                    local clockPos = math.floor((relativeBearing + 15) / 30) + 1
+                    if clockPos > 12 then clockPos = clockPos - 12 end
+                    threatType = threatLevel
+                    threatDetail = string.format("%d o'clock, %.1fkm", clockPos, distance / 1000)
+                    if closing then
+                        threatDetail = threatDetail .. ", closing"
+                    end
+                end
+                
+                -- Add ALL detected bandits to the list for multi-bandit reporting
+                local banditName = unit:GetPlayerName() or unit:GetName()
+                table.insert(threateningBandits, {
+                    unit = unit,
+                    distance = distance,
+                    threatType = threatType,
+                    threatDetail = threatDetail,
+                    relativeBearing = relativeBearing,
+                    threatLevel = threatLevel,
+                    banditName = banditName
+                })
             end
             
             -- Dogfight assist features (if enabled)
             if playerData.dogfightAssist and data.engaged then
-                self:ProvideDogfightAssist(playerUnit, unit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing)
+                -- Calculate effective cooldown based on combat intensity
+                local baseCooldown = PILOT_INTUITION_CONFIG.dogfightMessageCooldown
+                local effectiveCooldown = baseCooldown
+                
+                -- If in high-intensity combat (many bandits), increase cooldown to reduce spam
+                local engagedBandits = 0
+                for _, targetData in pairs(playerData.trackedAirTargets) do
+                    if targetData.engaged then
+                        engagedBandits = engagedBandits + 1
+                    end
+                end
+                
+                if engagedBandits >= PILOT_INTUITION_CONFIG.combatIntensityThreshold then
+                    effectiveCooldown = baseCooldown * PILOT_INTUITION_CONFIG.combatIntensityCooldownMultiplier
+                    PILog(LOG_DEBUG, string.format("PilotIntuition: High-intensity combat (%d bandits) - dogfight cooldown increased to %.1fs", engagedBandits, effectiveCooldown))
+                end
+                
+                self:ProvideDogfightAssist(playerUnit, unit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing, effectiveCooldown)
             end
         end
     end
 
-    -- Report the closest unengaged bandit
-    if closestUnit then
+    -- Report multiple bandits situation with tactical picture
+    PILog(LOG_DEBUG, string.format("PilotIntuition: Threatening bandits count: %d", #threateningBandits))
+    if #threateningBandits > 0 then
+        for i, threat in ipairs(threateningBandits) do
+            PILog(LOG_DEBUG, string.format("  Threat %d: %s at %.0fm, type: %s", i, threat.unit:GetName(), threat.distance, threat.threatType))
+        end
+        local now = timer.getTime()
+        if (now - playerData.lastDogfightTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
+            local message = ""
+            if #threateningBandits == 1 then
+                -- Single bandit - detailed callout
+                local threat = threateningBandits[1]
+                local banditName = threat.banditName or "bandit"
+                if threat.threatDetail then
+                    message = string.format("%s - %s! %s", banditName, threat.threatType:gsub("^%l", string.upper), threat.threatDetail)
+                else
+                    message = string.format("%s - %s!", banditName, threat.threatType:gsub("^%l", string.upper))
+                end
+            else
+                -- Multiple bandits - build tactical picture, showing only most threatening
+                -- Sort by threat priority: hot > cold > distant, then by distance
+                table.sort(threateningBandits, function(a, b)
+                    local priorityOrder = {hot = 1, cold = 2, distant = 3}
+                    local aPriority = priorityOrder[a.threatLevel] or 4
+                    local bPriority = priorityOrder[b.threatLevel] or 4
+                    if aPriority ~= bPriority then
+                        return aPriority < bPriority
+                    else
+                        return a.distance < b.distance
+                    end
+                end)
+                
+                local maxDisplay = PILOT_INTUITION_CONFIG.maxThreatDisplay
+                local displayCount = math.min(maxDisplay, #threateningBandits)
+                local totalCount = #threateningBandits
+                
+                message = string.format("Multiple bandits - %d contacts", totalCount)
+                if displayCount < totalCount then
+                    message = message .. string.format(" (showing %d most threatening)", displayCount)
+                end
+                message = message .. ": "
+                
+                local threats = {}
+                for i = 1, displayCount do
+                    local threat = threateningBandits[i]
+                    local banditName = threat.banditName or "unknown"
+                    local desc = banditName .. " - " .. threat.threatType
+                    if threat.threatDetail then
+                        desc = desc .. " (" .. threat.threatDetail .. ")"
+                    end
+                    table.insert(threats, desc)
+                end
+                message = message .. table.concat(threats, ", ")
+            end
+            
+            if PILOT_INTUITION_CONFIG.activeMessaging then
+                MESSAGE:New(message, 10):ToClient(client)
+            end
+            playerData.lastDogfightTime = now
+            
+            -- Mark only HOT bandits as engaged (within hot range or actively threatening)
+            for _, threat in ipairs(threateningBandits) do
+                local data = playerData.trackedAirTargets[threat.unit:GetName()]
+                if data and threat.threatLevel == "hot" then
+                    data.engaged = true
+                    data.lastEngagedTime = now
+                end
+            end
+        end
+    end
+
+    -- Report the closest unengaged bandit (if no threats)
+    if #threateningBandits == 0 and closestUnit then
         local data = playerData.trackedAirTargets[closestUnit:GetName()]
         if data and not data.engaged then
             self:ReportAirTarget(closestUnit, playerPos, playerData, client)
         end
     end
 
-    -- Check for multiple bandits
+    -- Check for multiple bandits (with 5-minute cooldown to reduce spam)
     if banditCount > 1 then
-        self:ReportDogfight(nil, playerPos, playerData, client, "Multiple bandits in vicinity!")
+        local now = timer.getTime()
+        if (now - (playerData.lastMultipleBanditsWarningTime or 0)) >= PILOT_INTUITION_CONFIG.multipleBanditsWarningCooldown then
+            self:ReportDogfight(nil, playerPos, playerData, client, "Multiple bandits in vicinity!")
+            playerData.lastMultipleBanditsWarningTime = now
+        end
     end
 end
 
@@ -1675,9 +2249,11 @@ function PilotIntuition:ClassifyGroundUnit(unitType)
     end
 end
 
-function PilotIntuition:ProvideDogfightAssist(playerUnit, banditUnit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing)
+function PilotIntuition:ProvideDogfightAssist(playerUnit, banditUnit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing, effectiveCooldown)
     local now = timer.getTime()
-    if (now - playerData.lastDogfightAssistTime) < (PILOT_INTUITION_CONFIG.dogfightMessageCooldown * playerData.frequencyMultiplier) then
+    -- Use provided effectiveCooldown (for combat intensity adjustment) or fall back to default
+    local cooldown = effectiveCooldown or PILOT_INTUITION_CONFIG.dogfightMessageCooldown
+    if (now - playerData.lastDogfightAssistTime) < (cooldown * playerData.frequencyMultiplier) then
         return
     end
     if not PILOT_INTUITION_CONFIG.activeMessaging then return end
