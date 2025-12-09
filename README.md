@@ -19,8 +19,8 @@ Whether flying solo or in formation, players receive timely warnings about bandi
 - **Intelligent Threat Assessment**: Advanced aspect angle and clock position calculations accurately determine bandit orientation and position relative to your aircraft, providing precise tactical information about whether threats are nose-on, tail-chase, or flanking.
 - **Combat Focus Filtering**: Realistic tunnel-vision behavior during close combat—when engaged with an immediate threat (HOT bandit within 1km), distant or non-threatening bandits are automatically suppressed to reduce message clutter and simulate pilot focus under stress.
 - **Dogfight Assistance**: Warnings for merging bandits, tail threats, head-on encounters, and more.
-- **Visual Markers**: Optional smoke or flare markers for spotted targets.
-- **Independent Scanning Toggles**: Separate controls for air and ground target detection, available globally (mission-wide) and per-player.
+- **Visual Markers**: Optional smoke or flare markers for spotted targets. The illumination system provides a limited number of illumination flares (default 3 per sortie) that can be dropped manually via the F10 menu to mark positions or targets. Flares have a cooldown between drops (30 seconds) and are reloaded to full capacity upon landing at a friendly airbase.
+- **Independent Scanning Toggles**: Separate controls for air and ground target detection per-player.
 - **Player Customization**: Configurable settings via in-game F10 menu, including per-player overrides for scanning preferences and alert frequency modes.
 - **Environmental Awareness**: Reduced detection ranges at night or in bad weather.
 - **Multiplayer Support**: Works in both single-player and multiplayer environments.
