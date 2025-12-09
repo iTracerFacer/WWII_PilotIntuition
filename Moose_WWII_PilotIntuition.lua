@@ -35,7 +35,7 @@
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 3  -- Default to DEBUG level
+PILOT_INTUITION_LOG_LEVEL = 2  -- Default to INFO level
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then
@@ -111,16 +111,16 @@ PILOT_INTUITION_MESSAGES = {
         "Pilot Intuition engaged! Simulate WWII-era reconnaissance. F10 menu for controls.",
     },
     formationJoin = {
-        "You've joined flight with %s - air detection increased to %dm, ground to %dm.",
-        "%s is now flying off your wing - detection ranges boosted to %dm air, %dm ground.",
-        "Welcome aboard, %s! Formation tightens detection to %dm for air, %dm for ground.",
-        "%s joins the formation - eyes sharper now, %dm air, %dm ground range.",
+        "You've joined flight with %s - air detection increased to %.0f%s, ground to %.0f%s.",
+        "%s is now flying off your wing - detection ranges boosted to %.0f%s air, %.0f%s ground.",
+        "Welcome aboard, %s! Formation tightens detection to %.0f%s for air, %.0f%s for ground.",
+        "%s joins the formation - eyes sharper now, %.0f%s air, %.0f%s ground range.",
     },
     formationLeave = {
-        "%s left formation - air detection reduced to %dm, ground to %dm.",
-        "%s is outa here - detection drops to %dm air, %dm ground.",
-        "Formation broken by %s - ranges now %dm air, %dm ground.",
-        "%s has peeled off - back to solo detection: %dm air, %dm ground.",
+        "%s left formation - air detection reduced to %.0f%s, ground to %.0f%s.",
+        "%s is outa here - detection drops to %.0f%s air, %.0f%s ground.",
+        "Formation broken by %s - ranges now %.0f%s air, %.0f%s ground.",
+        "%s has peeled off - back to solo detection: %.0f%s air, %.0f%s ground.",
     },
     formationIntegrityLow = {
         "Formation integrity low! Tighten up.",
@@ -1863,21 +1863,25 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     if not inCombat and (now - playerData.lastFormationChangeTime) >= (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then
         local newWingmen = playerData.cachedWingmen
         local newMultiplier = (newWingmen > 0) and (2 * newWingmen) or 1
-        local newAirRange = math.floor(PILOT_INTUITION_CONFIG.airDetectionRange * newMultiplier * envMult)
-        local newGroundRange = math.floor(PILOT_INTUITION_CONFIG.groundDetectionRange * newMultiplier * envMult)
+        local newAirRangeMeters = PILOT_INTUITION_CONFIG.airDetectionRange * newMultiplier * envMult
+        local newGroundRangeMeters = PILOT_INTUITION_CONFIG.groundDetectionRange * newMultiplier * envMult
+        
+        -- Convert to player's preferred units
+        local newAirRange, airUnit = self:FormatDistance(newAirRangeMeters, playerKey)
+        local newGroundRange, groundUnit = self:FormatDistance(newGroundRangeMeters, playerKey)
         
         PILog(LOG_DEBUG, "PilotIntuition: Formation change check - new: " .. newWingmen .. ", prev: " .. previousWingmen .. ", activeMessaging: " .. tostring(PILOT_INTUITION_CONFIG.activeMessaging))
         
         if newWingmen > previousWingmen then
             PILog(LOG_INFO, "PilotIntuition: Formation joined - sending message")
             if PILOT_INTUITION_CONFIG.activeMessaging then
-                MESSAGE:New(self:GetRandomMessage("formationJoin", {"wingman", newAirRange, newGroundRange}), 10):ToClient(client)
+                MESSAGE:New(self:GetRandomMessage("formationJoin", {"wingman", newAirRange, airUnit, newGroundRange, groundUnit}), 10):ToClient(client)
             end
             playerData.lastFormationChangeTime = now
         elseif newWingmen < previousWingmen then
             PILog(LOG_INFO, "PilotIntuition: Formation left - sending message")
             if PILOT_INTUITION_CONFIG.activeMessaging then
-                MESSAGE:New(self:GetRandomMessage("formationLeave", {"wingman", newAirRange, newGroundRange}), 10):ToClient(client)
+                MESSAGE:New(self:GetRandomMessage("formationLeave", {"wingman", newAirRange, airUnit, newGroundRange, groundUnit}), 10):ToClient(client)
             end
             playerData.lastFormationChangeTime = now
         end
