@@ -1587,8 +1587,15 @@ function PilotIntuition:MenuDropIlluminationOnTarget(playerUnit, index)
     playerData.illuminationFlares = playerData.illuminationFlares - 1
     playerData.lastIlluminationTime = now
     
-    local bearing = playerUnit:GetCoordinate():GetAngleDegrees(playerUnit:GetCoordinate():GetDirectionVec3(targetPos))
-    local rawDistance = playerUnit:GetCoordinate():Get2DDistance(targetPos)
+    local playerCoord = playerUnit:GetCoordinate()
+    if not playerCoord then
+        PILog(LOG_ERROR, "PilotIntuition: Could not get player coordinate for illumination drop")
+        MESSAGE:New("Error: Could not determine your position.", 10):ToClient(client)
+        return
+    end
+    
+    local bearing = playerCoord:GetAngleDegrees(playerCoord:GetDirectionVec3(targetPos))
+    local rawDistance = playerCoord:Get2DDistance(targetPos)
     local distance, unit = self:FormatDistance(rawDistance, playerKey)
     MESSAGE:New(string.format("Illumination flare dropped on Target %d (%.0f°, %.1f%s). (%d remaining)", index, bearing, distance, unit, playerData.illuminationFlares), 10):ToClient(client)
     PILog(LOG_INFO, "PilotIntuition: Player " .. playerKey .. " dropped illumination on target " .. index .. ". " .. playerData.illuminationFlares .. " flares remaining")
@@ -2306,15 +2313,27 @@ function PilotIntuition:ReportAirTarget(unit, playerPos, playerData, client, pla
     if now - playerData.lastMessageTime < (PILOT_INTUITION_CONFIG.messageCooldown * playerData.frequencyMultiplier) then return end
     if not PILOT_INTUITION_CONFIG.activeMessaging then return end
 
-    local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(unit:GetCoordinate()))
-    local rangeMeters = playerPos:Get2DDistance(unit:GetCoordinate())
+    local unitCoord = unit:GetCoordinate()
+    if not unitCoord then
+        PILog(LOG_DEBUG, "PilotIntuition: Could not get unit coordinate for air target report")
+        return
+    end
+    
+    local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(unitCoord))
+    local rangeMeters = playerPos:Get2DDistance(unitCoord)
     local range, distUnit = self:FormatDistance(rangeMeters, playerKey)
     local alt = unit:GetAltitude() / 1000  -- Keep altitude in km for brevity
     local threat = "cold"
     if rangeMeters <= PILOT_INTUITION_CONFIG.threatHotRange then
         threat = "hot"
     end
-    local groupSize = #unit:GetGroup():GetUnits()
+    
+    local group = unit:GetGroup()
+    if not group then
+        PILog(LOG_DEBUG, "PilotIntuition: Could not get group for air target")
+        return
+    end
+    local groupSize = #group:GetUnits()
     local sizeDesc = groupSize == 1 and "single" or (groupSize == 2 and "pair" or "flight of " .. groupSize)
 
     MESSAGE:New(self:GetRandomMessage("airTargetDetected", {threat, bearing, range, distUnit, alt, sizeDesc}), 10):ToClient(client)
@@ -2392,10 +2411,14 @@ function PilotIntuition:CheckCloseFlyingForPlayer(playerUnit, playerData, client
     for _, info in ipairs(activeClients) do
         local otherUnit = info.unit
         if otherUnit and otherUnit:IsAlive() and otherUnit:GetCoalition() == playerCoalition and otherUnit:GetName() ~= playerUnit:GetName() then
-            local distance = playerPos:Get2DDistance(otherUnit:GetCoordinate())
+            local otherCoord = otherUnit:GetCoordinate()
+            if not otherCoord then
+                goto continue_close_flying
+            end
+            local distance = playerPos:Get2DDistance(otherCoord)
             if distance <= PILOT_INTUITION_CONFIG.complimentRange then
                 -- Calculate relative bearing
-                local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(otherUnit:GetCoordinate()))
+                local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(otherCoord))
                 local relativeBearing = bearing - playerHeading
                 relativeBearing = (relativeBearing % 360 + 360) % 360  -- Normalize to 0-360
 
@@ -2415,6 +2438,7 @@ function PilotIntuition:CheckCloseFlyingForPlayer(playerUnit, playerData, client
                 end
             end
         end
+        ::continue_close_flying::
     end
 end
 
@@ -2602,11 +2626,15 @@ function PilotIntuition:OnPlayerShot(EventData)
             local minDist = math.huge
             local nearestID = nil
             for id, data in pairs(playerData.trackedAirTargets) do
-                if not data.engaged then
-                    local distance = playerUnit:GetCoordinate():Get2DDistance(data.unit:GetCoordinate())
-                    if distance < minDist then
-                        minDist = distance
-                        nearestID = id
+                if not data.engaged and data.unit and data.unit:IsAlive() then
+                    local playerCoord = playerUnit:GetCoordinate()
+                    local targetCoord = data.unit:GetCoordinate()
+                    if playerCoord and targetCoord then
+                        local distance = playerCoord:Get2DDistance(targetCoord)
+                        if distance < minDist then
+                            minDist = distance
+                            nearestID = id
+                        end
                     end
                 end
             end
@@ -2632,42 +2660,45 @@ function PilotIntuition:OnShotFired(EventData)
     clients:ForEachClient(function(client)
         if client and type(client.GetUnit) == "function" then
             local playerUnit = client:GetUnit()
-        if playerUnit and playerUnit:IsAlive() and playerUnit:GetCoalition() ~= shooter:GetCoalition() then
-            local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
-            if self.players[playerName] and self.players[playerName].dogfightAssist then
-                local playerData = self.players[playerName]
-                local now = timer.getTime()
-                if not PILOT_INTUITION_CONFIG.activeMessaging then return end
-                
-                -- Check if shot is directed at player (within range and aspect)
-                local distance = playerUnit:GetCoordinate():Get2DDistance(shooter:GetCoordinate())
-                if distance < 1500 and (now - playerData.lastDogfightAssistTime) >= (PILOT_INTUITION_CONFIG.dogfightMessageCooldown * playerData.frequencyMultiplier) then
-                    local playerPos = playerUnit:GetCoordinate()
-                    local shooterPos = shooter:GetCoordinate()
-                    local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(shooterPos))
-                    local playerHeading = math.deg(playerUnit:GetHeading())
-                    local relativeBearing = (bearing - playerHeading + 360) % 360
+            if playerUnit and playerUnit:IsAlive() and playerUnit:GetCoalition() ~= shooter:GetCoalition() then
+                local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+                if self.players[playerName] and self.players[playerName].dogfightAssist then
+                    local playerData = self.players[playerName]
+                    local now = timer.getTime()
+                    if not PILOT_INTUITION_CONFIG.activeMessaging then return end
                     
-                    -- Determine evasion direction
-                    local direction = "left"
-                    if relativeBearing > 180 then
-                        direction = "right"
+                    -- Check if shot is directed at player (within range and aspect)
+                    local playerCoord = playerUnit:GetCoordinate()
+                    local shooterCoord = shooter:GetCoordinate()
+                    if not playerCoord or not shooterCoord then
+                        return
                     end
-                    
-                    -- Check if above or below
-                    local altDelta = shooter:GetAltitude() - playerUnit:GetAltitude()
-                    local vertical = ""
-                    if altDelta > 100 then
-                        vertical = " Push!"
-                    elseif altDelta < -100 then
-                        vertical = " Pull!"
+                    local distance = playerCoord:Get2DDistance(shooterCoord)
+                    if distance < 1500 and (now - playerData.lastDogfightAssistTime) >= (PILOT_INTUITION_CONFIG.dogfightMessageCooldown * playerData.frequencyMultiplier) then
+                        local bearing = playerCoord:GetAngleDegrees(playerCoord:GetDirectionVec3(shooterCoord))
+                        local playerHeading = math.deg(playerUnit:GetHeading())
+                        local relativeBearing = (bearing - playerHeading + 360) % 360
+                        
+                        -- Determine evasion direction
+                        local direction = "left"
+                        if relativeBearing > 180 then
+                            direction = "right"
+                        end
+                        
+                        -- Check if above or below
+                        local altDelta = shooter:GetAltitude() - playerUnit:GetAltitude()
+                        local vertical = ""
+                        if altDelta > 100 then
+                            vertical = " Push!"
+                        elseif altDelta < -100 then
+                            vertical = " Pull!"
+                        end
+                        
+                        MESSAGE:New(self:GetRandomMessage("underFire", {direction, vertical})):ToClient(client)
+                        playerData.lastDogfightAssistTime = now
                     end
-                    
-                    MESSAGE:New(self:GetRandomMessage("underFire", {direction, vertical})):ToClient(client)
-                    playerData.lastDogfightAssistTime = now
                 end
             end
-        end
         end
     end)
 end
