@@ -137,9 +137,9 @@ PILOT_INTUITION_MESSAGES = {
     },
     groundTargetDetected = {
         "%s contact: %s %s at %.0f degrees, %.1f %s.",
-        "Ground threat: %s %s spotted at %.0f degrees, %.1f %s.",
+        "Ground threat: %s %s %s spotted at %.0f degrees, %.1f %s.",
         "%s units detected: %s %s, %.0f degrees, %.1f %s.",
-        "Enemy ground: %s %s at bearing %.0f, %.1f %s away.",
+        "Enemy ground: %s %s %s at bearing %.0f, %.1f %s away.",
     },
     dogfightEngaged = {
         "Engaged!",
@@ -342,6 +342,17 @@ function PilotIntuition:GetPlayerDataKey(playerUnit)
     -- Try player name second (may be aliased to unit name)
     if playerName and self.players[playerName] then
         return playerName
+    end
+    
+    -- Try to find player data by searching _DATABASE.CLIENTS for matching unit
+    if _DATABASE and _DATABASE.CLIENTS then
+        for clientName, clientData in pairs(_DATABASE.CLIENTS) do
+            if clientData and clientData.UnitName == unitName then
+                if self.players[clientName] then
+                    return clientName
+                end
+            end
+        end
     end
     
     return nil
