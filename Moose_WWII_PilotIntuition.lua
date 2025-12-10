@@ -499,7 +499,7 @@ function PilotIntuition:ScanTargets()
                 end
             end
             
-            -- Count AI wingmen if enabled
+            -- Count AI wingmen if enabled (aircraft only, same coalition)
             if PILOT_INTUITION_CONFIG.countAIWingmen then
                 PILog(LOG_INFO, "PilotIntuition: Checking AI wingmen for player " .. playerName)
                 
@@ -514,19 +514,22 @@ function PilotIntuition:ScanTargets()
                         local groupUnits = mooseGroup:GetUnits()
                         for _, aiUnit in pairs(groupUnits) do
                             if aiUnit and aiUnit:IsAlive() and aiUnit:GetName() ~= info.unit:GetName() then
-                                -- Check distance first (cheaper than GetPlayerName)
-                                local aiCoord = aiUnit:GetCoordinate()
-                                if aiCoord then
-                                    local dist = info.pos:Get2DDistance(aiCoord)
-                                    if dist <= PILOT_INTUITION_CONFIG.formationRange then
-                                        -- Now check if it's AI (not a player)
-                                        local playerName = aiUnit:GetPlayerName()
-                                        local isAI = not playerName or playerName == ""
-                                        if isAI then
-                                            -- Add AI with multiplier (can be fractional)
-                                            playerData.cachedWingmen = playerData.cachedWingmen + PILOT_INTUITION_CONFIG.aiWingmenMultiplier
-                                            aiCount = aiCount + 1
-                                            PILog(LOG_INFO, "PilotIntuition: Added AI wingman " .. aiUnit:GetName() .. " at " .. math.floor(dist) .. "m, total: " .. playerData.cachedWingmen)
+                                -- Only count aircraft (filter out ground units, ships, etc.)
+                                if aiUnit:IsAir() then
+                                    -- Check distance first (cheaper than GetPlayerName)
+                                    local aiCoord = aiUnit:GetCoordinate()
+                                    if aiCoord then
+                                        local dist = info.pos:Get2DDistance(aiCoord)
+                                        if dist <= PILOT_INTUITION_CONFIG.formationRange then
+                                            -- Now check if it's AI (not a player)
+                                            local playerName = aiUnit:GetPlayerName()
+                                            local isAI = not playerName or playerName == ""
+                                            if isAI then
+                                                -- Add AI with multiplier (can be fractional)
+                                                playerData.cachedWingmen = playerData.cachedWingmen + PILOT_INTUITION_CONFIG.aiWingmenMultiplier
+                                                aiCount = aiCount + 1
+                                                PILog(LOG_INFO, "PilotIntuition: Added AI wingman " .. aiUnit:GetName() .. " at " .. math.floor(dist) .. "m, total: " .. playerData.cachedWingmen)
+                                            end
                                         end
                                     end
                                 end
@@ -910,6 +913,13 @@ function PilotIntuition:WireEventHandlers()
         local unit = EventData.IniUnit
         if not unit or not unit:IsAlive() then return end
         
+        -- Only create menus for player-controlled units
+        local playerName = unit:GetPlayerName()
+        if not playerName then
+            PILog(LOG_TRACE, "PilotIntuition: Birth event for non-player unit, skipping menu creation")
+            return
+        end
+        
         local group = unit:GetGroup()
         if not group then return end
         local groupName = group:GetName()
@@ -920,7 +930,7 @@ function PilotIntuition:WireEventHandlers()
             return 
         end
         
-        PILog(LOG_INFO, "PilotIntuition: Birth event - creating menu for group: " .. groupName)
+        PILog(LOG_INFO, "PilotIntuition: Birth event - creating menu for player group: " .. groupName)
         selfref.playerMenus[groupName] = selfref:BuildGroupMenus(group)
         
         -- Send welcome message to group
