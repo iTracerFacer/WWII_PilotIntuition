@@ -2412,33 +2412,31 @@ function PilotIntuition:CheckCloseFlyingForPlayer(playerUnit, playerData, client
         local otherUnit = info.unit
         if otherUnit and otherUnit:IsAlive() and otherUnit:GetCoalition() == playerCoalition and otherUnit:GetName() ~= playerUnit:GetName() then
             local otherCoord = otherUnit:GetCoordinate()
-            if not otherCoord then
-                goto continue_close_flying
-            end
-            local distance = playerPos:Get2DDistance(otherCoord)
-            if distance <= PILOT_INTUITION_CONFIG.complimentRange then
-                -- Calculate relative bearing
-                local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(otherCoord))
-                local relativeBearing = bearing - playerHeading
-                relativeBearing = (relativeBearing % 360 + 360) % 360  -- Normalize to 0-360
+            if otherCoord then
+                local distance = playerPos:Get2DDistance(otherCoord)
+                if distance <= PILOT_INTUITION_CONFIG.complimentRange then
+                    -- Calculate relative bearing
+                    local bearing = playerPos:GetAngleDegrees(playerPos:GetDirectionVec3(otherCoord))
+                    local relativeBearing = bearing - playerHeading
+                    relativeBearing = (relativeBearing % 360 + 360) % 360  -- Normalize to 0-360
 
-                -- Check if head-on (within 30 degrees of front or back, but for pass, focus on front)
-                local isHeadOn = relativeBearing < 30 or relativeBearing > 330
+                    -- Check if head-on (within 30 degrees of front or back, but for pass, focus on front)
+                    local isHeadOn = relativeBearing < 30 or relativeBearing > 330
 
-                if isHeadOn and distance <= PILOT_INTUITION_CONFIG.headOnWarningRange then
-                    if now - playerData.lastHeadOnWarningTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
-                        MESSAGE:New(self:GetRandomMessage("headOnWarning"), 10):ToClient(client)
-                        playerData.lastHeadOnWarningTime = now
-                    end
-                elseif not isHeadOn then
-                    if now - playerData.lastComplimentTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
-                        MESSAGE:New(self:GetRandomMessage("closeFlyingCompliment"), 10):ToClient(client)
-                        playerData.lastComplimentTime = now
+                    if isHeadOn and distance <= PILOT_INTUITION_CONFIG.headOnWarningRange then
+                        if now - playerData.lastHeadOnWarningTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
+                            MESSAGE:New(self:GetRandomMessage("headOnWarning"), 10):ToClient(client)
+                            playerData.lastHeadOnWarningTime = now
+                        end
+                    elseif not isHeadOn then
+                        if now - playerData.lastComplimentTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
+                            MESSAGE:New(self:GetRandomMessage("closeFlyingCompliment"), 10):ToClient(client)
+                            playerData.lastComplimentTime = now
+                        end
                     end
                 end
             end
         end
-        ::continue_close_flying::
     end
 end
 
