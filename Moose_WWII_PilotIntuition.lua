@@ -26,6 +26,7 @@
 -- - Configurable settings via F10 menu for players to customize their experience.
 -- - Scheduled summaries for players preferring less frequent updates.
 -- - Per Player customization of dogfight assistance, marker types, and scanning preferences and message frequency.
+-- - Per Player Multi Language Support: English, German, French, Spanish, Russian.
 
 --
 -- Setup Instructions:
