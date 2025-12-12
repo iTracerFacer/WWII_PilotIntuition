@@ -16,6 +16,7 @@
 
 -- Features:
 -- - **Dynamic Detection Ranges**: Detection ranges automatically adjust based on formation flying and environmental conditions. Flying in tight formations with wingmen significantly boosts spotting distances for both air and ground targets. For example, a solo pilot might detect air targets at 5km, but in a 2-ship formation, this increases to 10km, and in a 4-ship formation to 15km. Environmental factors like night reduce ranges (e.g., 50% at night), while bad weather can further decrease visibility. This simulates historical WWII reconnaissance where formation integrity was crucial for situational awareness.
+-- - Line of Sight checks to ensure targets are only reported when visible.
 -- - Realistic messaging simulating pilot radio calls for spotting bandits and ground threats.
 -- - Formation integrity monitoring with alerts for wingmen presence.
 -- - Dogfight assistance with alerts for merging bandits, tail warnings, head-on threats, and more.
