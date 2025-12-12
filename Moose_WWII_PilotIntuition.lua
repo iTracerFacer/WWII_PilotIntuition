@@ -35,7 +35,7 @@
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 3  -- Default to DEBUG level
+PILOT_INTUITION_LOG_LEVEL = 1  -- Default to INFO level
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then
@@ -52,7 +52,7 @@ local LOG_TRACE = 4
 
 -- Global configuration table for settings
 PILOT_INTUITION_CONFIG = {
-    airDetectionRange = 20000,  -- Meters (base range for air targets) (can be modified by formation and environment)
+    airDetectionRange = 8000,  -- Meters (base range for air targets) (can be modified by formation and environment)
     groundDetectionRange = 5000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
     messageCooldown = 10,  -- Seconds between messages
     markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
