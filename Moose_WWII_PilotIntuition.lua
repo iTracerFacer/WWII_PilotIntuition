@@ -102,65 +102,69 @@ PILOT_INTUITION_CONFIG = {
     countAIWingmen = true,  -- Count AI units in same group as wingmen for formation bonus (false = players only count as wingmen)
     aiWingmenMultiplier = 1.0,  -- Multiplier for AI wingmen (0.5 = half credit, 1.0 = full credit)
     distanceUnit = "mi",  -- Default distance unit: "km" for kilometers, "mi" for miles (nautical miles)
+    defaultLanguage = "EN",  -- Default language: "EN", "DE", "FR", "ES", "RU"
 }
 
--- Message table with variations for different types
-PILOT_INTUITION_MESSAGES = {
-    welcome = {
+-- Multilingual message and menu tables
+-- Each language contains all messages and menu text
+PILOT_INTUITION_LANGUAGES = {
+    EN = {
+        -- Messages
+        welcome = {
         "Welcome to WWII Pilot Intuition! This system simulates pilot reconnaissance for spotting air and ground targets. Use F10 menu for settings.",
         "Greetings, pilot! WWII Pilot Intuition is active. It helps you spot bandits and ground threats. Check F10 for options.",
-        "Pilot Intuition engaged! Simulate WWII-era reconnaissance. F10 menu for controls.",
-    },
-    formationJoin = {
+            "Pilot Intuition engaged! Simulate WWII-era reconnaissance. F10 menu for controls.",
+        },
+        formationJoin = {
         "You've joined flight with %s - air detection increased to %.0f%s, ground to %.0f%s.",
         "%s is now flying off your wing - detection ranges boosted to %.0f%s air, %.0f%s ground.",
         "Welcome aboard, %s! Formation tightens detection to %.0f%s for air, %.0f%s for ground.",
-        "%s joins the formation - eyes sharper now, %.0f%s air, %.0f%s ground range.",
-    },
-    formationLeave = {
+            "%s joins the formation - eyes sharper now, %.0f%s air, %.0f%s ground range.",
+        },
+        formationLeave = {
         "%s left formation - air detection reduced to %.0f%s, ground to %.0f%s.",
         "%s is outa here - detection drops to %.0f%s air, %.0f%s ground.",
         "Formation broken by %s - ranges now %.0f%s air, %.0f%s ground.",
-        "%s has peeled off - back to solo detection: %.0f%s air, %.0f%s ground.",
-    },
-    formationIntegrityLow = {
+            "%s has peeled off - back to solo detection: %.0f%s air, %.0f%s ground.",
+        },
+        formationIntegrityLow = {
         "Formation integrity low! Tighten up.",
         "Form up, pilots! We're spread too thin.",
         "Close ranks! Formation integrity compromised.",
-        "Get back in formation, lads! We're vulnerable.",
-    },
-    airTargetDetected = {
+            "Get back in formation, lads! We're vulnerable.",
+        },
+        airTargetDetected = {
         "Bandit %s at %.0f degrees, %.1f %s, angels %.0f (%s)!",
         "Enemy aircraft %s: %.0f degrees, %.1f %s, altitude %.0f (%s).",
         "Bogey %s at %.0f o'clock, %.1f %s out, angels %.0f (%s).",
         "Hostile contact %s: %.0f degrees, %.1f %s, %.0f angels (%s).",
-        "Bandit inbound %s: %.0f degrees, %.1f %s, angels %.0f (%s).",
-    },
-    groundTargetDetected = {
+            "Bandit inbound %s: %.0f degrees, %.1f %s, angels %.0f (%s).",
+        },
+        groundTargetDetected = {
         "%s contact: %s %s at %.0f degrees, %.1f %s.",
         "Ground threat: %s %s %s spotted at %.0f degrees, %.1f %s.",
         "%s units detected: %s %s, %.0f degrees, %.1f %s.",
-        "Enemy ground: %s %s %s at bearing %.0f, %.1f %s away.",
-    },
-    dogfightEngaged = {
+            "Enemy ground: %s %s %s at bearing %.0f, %.1f %s away.",
+        },
+        dogfightEngaged = {
         "Engaged!",
         "Tally ho! Dogfight started.",
         "Bandit engaged! Fight's on.",
-        "Dogfight! Guns hot.",
-    },
-    dogfightConcluded = {
+            "Dogfight! Guns hot.",
+        },
+        dogfightConcluded = {
         "Dogfight concluded.",
         "Fight's over. Clear.",
         "Dogfight ended. Stand down.",
-        "Engagement terminated.",
-    },
-    underFire = {
+            "Engagement terminated.",
+        },
+        underFire = {
         "Under fire! Break %s!%s",
         "Taking hits! Evade %s!%s",
         "Shots fired! Turn %s now!%s",
-        "Incoming! Break %s!%s",
-    },
-    closeFlyingCompliment = {
+            "Incoming! Break %s!%s",
+        },
+        closeFlyingCompliment = {
         "Nice flying! Tip-to-tip formation.",
         "Hey, nice! That's some close flying.",
         "Great job! That's close!",
@@ -190,50 +194,897 @@ PILOT_INTUITION_MESSAGES = {
         "Hell yeah, that's tight! Good work.",
         "Easy tiger, but damn good flying.",
         "You're a formation expert! Tip-to-tip.",
-        "Smooth moves, pilot! Close quarters.",
-    },
-    headOnWarning = {
+            "Smooth moves, pilot! Close quarters.",
+        },
+        headOnWarning = {
         "Whew! That was close!",
         "Whoa! Nearly a head-on!",
         "Close call! Watch that pass.",
         "Damn, that was tight! Be careful.",
-        "Holy crap, almost collided!",
-    },
-    markerSet = {
+            "Holy crap, almost collided!",
+        },
+        markerSet = {
         "Marker set to %s.",
         "Markers now %s.",
-        "Marker type changed to %s.",
-    },
-    dogfightAssistToggle = {
+            "Marker type changed to %s.",
+        },
+        dogfightAssistToggle = {
         "Dogfight assist %s.",
-        "Dogfight assistance %s.",
-    },
-    activeMessagingToggle = {
+            "Dogfight assistance %s.",
+        },
+        activeMessagingToggle = {
         "Active messaging %s.",
-        "Live alerts %s.",
-    },
-    airScanningToggle = {
+            "Live alerts %s.",
+        },
+        airScanningToggle = {
         "Air scanning %s.",
-        "Air detection %s.",
-    },
-    groundScanningToggle = {
+            "Air detection %s.",
+        },
+        groundScanningToggle = {
         "Ground scanning %s.",
-        "Ground detection %s.",
-    },
-    alertFrequencyToggle = {
+            "Ground detection %s.",
+        },
+        alertFrequencyToggle = {
         "Alert frequency set to %s.",
-        "Alerts now %s.",
-    },
-    summaryCooldown = {
+            "Alerts now %s.",
+        },
+        summaryCooldown = {
         "Summary on cooldown.",
-        "Wait a bit for another summary.",
-    },
-    noThreats = {
+            "Wait a bit for another summary.",
+        },
+        noThreats = {
         "No active threats.",
         "All clear.",
-        "Situation normal.",
+            "Situation normal.",
+        },
+        -- Additional hardcoded messages that need translation
+        systemActive = "WWII Pilot Intuition active! Use F10 menu for settings.",
+        logLevelSet = "Log level set to: %s",
+        distanceUnitsSet = "Distance units set to %s.",
+        targetNotAvailable = "Target %d not available.",
+        markedTarget = "Marked Target %d.",
+        noIlluminationFlares = "No illumination flares remaining. Land at a friendly airbase to rearm.",
+        illuminationNotReady = "Illumination not ready. Wait %d seconds.",
+        cannotDeterminePosition = "Cannot determine position for illumination drop.",
+        cannotDetermineAltitude = "Cannot determine altitude for illumination drop.",
+        illuminationDropped = "Illumination flare dropped at your position. (%d remaining)",
+        cannotDetermineTargetPosition = "Cannot determine target position for illumination drop.",
+        errorCouldNotDeterminePosition = "Error: Could not determine your position.",
+        illuminationDroppedOnTarget = "Illumination flare dropped on Target %d (%.0f°, %.1f%s). (%d remaining)",
+        illuminationRearmed = "Illumination flares rearmed: %d available.",
+        noGroundTargets = "No enemy ground targets detected in range.",
+        selectTargetFromMenu = "Select a target from the menu to mark it.",
+        targetInfo = "Target %d: %s %s %s, Bearing %.0f, Range %.1f %s",
+        -- State words
+        enabled = "enabled",
+        disabled = "disabled",
+        hot = "hot",
+        cold = "cold",
+        closing = "closing",
+        opening = "opening",
+        left = "left",
+        right = "right",
+        above = "above",
+        below = "below",
+        high = "high",
+        low = "low",
+        normal = "normal",
+        quiet = "quiet",
+        verbose = "verbose",
+        -- Menu text
+        menu = {
+            mainTitle = "WWII Pilot Intuition",
+            dogfightAssist = "Dogfight Assist",
+            enable = "Enable",
+            disable = "Disable",
+            markerType = "Marker Type",
+            smoke = "Smoke",
+            flare = "Flare",
+            red = "Red",
+            green = "Green",
+            blue = "Blue",
+            white = "White",
+            none = "None",
+            airScanning = "Air Scanning",
+            groundScanning = "Ground Scanning",
+            groundTargeting = "Ground Targeting",
+            scanForTargets = "Scan for Targets",
+            markTarget = "Mark Target",
+            target = "Target %d",
+            illumination = "Illumination (%d left)",
+            dropAtMyPosition = "Drop at My Position",
+            dropOnTarget = "Drop on Target",
+            alertFrequency = "Alert Frequency",
+            normalFreq = "Normal",
+            quietFreq = "Quiet",
+            verboseFreq = "Verbose",
+            summary = "Summary",
+            brief = "Brief",
+            detailed = "Detailed",
+            settingsAndGuides = "Settings & Player Guides",
+            distanceUnits = "Distance Units",
+            milesNautical = "Miles (Nautical)",
+            kilometers = "Kilometers",
+            playerGuide = "Player Guide",
+            systemOverview = "System Overview",
+            detectionRanges = "Detection Ranges",
+            dogfightAssistHelp = "Dogfight Assist Help",
+            groundTargetingHelp = "Ground Targeting Help",
+            formationTips = "Formation Tips",
+            illuminationHelp = "Illumination Help",
+            logLevel = "Log Level",
+            language = "Language / Sprache / Langue",
+            english = "English",
+            german = "Deutsch (German)",
+            french = "Français (French)",
+            spanish = "Español (Spanish)",
+            russian = "Русский (Russian)",
+        }
     },
+    -- German language
+    DE = {
+        welcome = {
+            "Willkommen bei WWII Piloten-Intuition! Dieses System simuliert Piloten-Aufklärung zum Erkennen von Luft- und Bodenzielen. Verwenden Sie das F10-Menü für Einstellungen.",
+            "Grüße, Pilot! WWII Piloten-Intuition ist aktiv. Es hilft Ihnen, Banditen und Bodenbedrohungen zu erkennen. Prüfen Sie F10 für Optionen.",
+            "Piloten-Intuition aktiviert! Simulieren Sie Aufklärung aus der WWII-Ära. F10-Menü für Steuerung.",
+        },
+        formationJoin = {
+            "Sie haben sich dem Flug mit %s angeschlossen - Lufterkennung erhöht auf %.0f%s, Boden auf %.0f%s.",
+            "%s fliegt jetzt an Ihrem Flügel - Erkennungsreichweiten erhöht auf %.0f%s Luft, %.0f%s Boden.",
+            "Willkommen an Bord, %s! Formation verbessert Erkennung auf %.0f%s für Luft, %.0f%s für Boden.",
+            "%s schließt sich der Formation an - Augen sind schärfer jetzt, %.0f%s Luft, %.0f%s Boden Reichweite.",
+        },
+        formationLeave = {
+            "%s hat Formation verlassen - Lufterkennung reduziert auf %.0f%s, Boden auf %.0f%s.",
+            "%s ist weg - Erkennung fällt auf %.0f%s Luft, %.0f%s Boden.",
+            "Formation durch %s aufgelöst - Reichweiten jetzt %.0f%s Luft, %.0f%s Boden.",
+            "%s hat sich abgesetzt - zurück zur Solo-Erkennung: %.0f%s Luft, %.0f%s Boden.",
+        },
+        formationIntegrityLow = {
+            "Formationsintegrität niedrig! Zusammenrücken.",
+            "Formiert euch, Piloten! Wir sind zu weit auseinander.",
+            "Reihen schließen! Formationsintegrität gefährdet.",
+            "Zurück in Formation, Leute! Wir sind verwundbar.",
+        },
+        airTargetDetected = {
+            "Bandit %s bei %.0f Grad, %.1f %s, Engel %.0f (%s)!",
+            "Feindflugzeug %s: %.0f Grad, %.1f %s, Höhe %.0f (%s).",
+            "Bogey %s bei %.0f Uhr, %.1f %s entfernt, Engel %.0f (%s).",
+            "Feindkontakt %s: %.0f Grad, %.1f %s, %.0f Engel (%s).",
+            "Bandit im Anflug %s: %.0f Grad, %.1f %s, Engel %.0f (%s).",
+        },
+        groundTargetDetected = {
+            "%s Kontakt: %s %s bei %.0f Grad, %.1f %s.",
+            "Bodenbedrohung: %s %s %s gesichtet bei %.0f Grad, %.1f %s.",
+            "%s Einheiten entdeckt: %s %s, %.0f Grad, %.1f %s.",
+            "Feindlicher Boden: %s %s %s bei Peilung %.0f, %.1f %s entfernt.",
+        },
+        dogfightEngaged = {
+            "Im Gefecht!",
+            "Tally ho! Luftkampf begonnen.",
+            "Bandit im Gefecht! Kampf läuft.",
+            "Luftkampf! Waffen scharf.",
+        },
+        dogfightConcluded = {
+            "Luftkampf beendet.",
+            "Kampf vorbei. Klar.",
+            "Luftkampf beendet. Entspannen.",
+            "Gefecht beendet.",
+        },
+        underFire = {
+            "Unter Beschuss! Ausweichen %s!%s",
+            "Treffer einsteckend! Ausweichen %s!%s",
+            "Schüsse abgefeuert! Wende %s jetzt!%s",
+            "Eingehend! Ausweichen %s!%s",
+        },
+        closeFlyingCompliment = {
+            "Schönes Fliegen! Spitze-zu-Spitze-Formation.",
+            "Hey, schön! Das ist enges Fliegen.",
+            "Großartige Arbeit! Das ist nah!",
+            "Ruhig, Tiger, ich kenne dich nicht so gut!",
+            "Beeindruckend! Flügelspitze zu Flügelspitze.",
+            "Geschmeidige Bewegungen! Nahkampffliegen.",
+            "Verdammt, das ist eng! Gutes Fliegen.",
+            "Heilige Scheiße, das ist nah! Gut gemacht.",
+            "Puh, das war knapp! Gute Steuerung.",
+            "Du klebst an meinem Flügel! Exzellentes Fliegen.",
+        },
+        headOnWarning = {
+            "Puh! Das war knapp!",
+            "Whoa! Fast frontal!",
+            "Knapper Anruf! Pass auf beim Überholen.",
+            "Verdammt, das war eng! Sei vorsichtig.",
+            "Heiliger Mist, fast kollidiert!",
+        },
+        markerSet = {
+            "Markierung auf %s gesetzt.",
+            "Markierungen jetzt %s.",
+            "Markierungstyp geändert auf %s.",
+        },
+        dogfightAssistToggle = {
+            "Luftkampf-Hilfe %s.",
+            "Luftkampf-Unterstützung %s.",
+        },
+        activeMessagingToggle = {
+            "Aktive Benachrichtigungen %s.",
+            "Live-Warnungen %s.",
+        },
+        airScanningToggle = {
+            "Luftscan %s.",
+            "Lufterkennung %s.",
+        },
+        groundScanningToggle = {
+            "Bodenscan %s.",
+            "Bodenerkennung %s.",
+        },
+        alertFrequencyToggle = {
+            "Warnfrequenz auf %s eingestellt.",
+            "Warnungen jetzt %s.",
+        },
+        summaryCooldown = {
+            "Zusammenfassung in Abklingzeit.",
+            "Warten Sie etwas für eine weitere Zusammenfassung.",
+        },
+        noThreats = {
+            "Keine aktiven Bedrohungen.",
+            "Alles klar.",
+            "Situation normal.",
+        },
+        systemActive = "WWII Piloten-Intuition aktiv! Verwenden Sie das F10-Menü für Einstellungen.",
+        logLevelSet = "Log-Level auf %s gesetzt",
+        distanceUnitsSet = "Entfernungseinheiten auf %s eingestellt.",
+        targetNotAvailable = "Ziel %d nicht verfügbar.",
+        markedTarget = "Ziel %d markiert.",
+        noIlluminationFlares = "Keine Leuchtraketen mehr. Landen Sie auf einem befreundeten Flugplatz zum Auftanken.",
+        illuminationNotReady = "Beleuchtung nicht bereit. Warten Sie %d Sekunden.",
+        cannotDeterminePosition = "Kann Position für Leuchtraketen-Abwurf nicht bestimmen.",
+        cannotDetermineAltitude = "Kann Höhe für Leuchtraketen-Abwurf nicht bestimmen.",
+        illuminationDropped = "Leuchtrakete an Ihrer Position abgeworfen. (%d verbleibend)",
+        cannotDetermineTargetPosition = "Kann Zielposition für Leuchtraketen-Abwurf nicht bestimmen.",
+        errorCouldNotDeterminePosition = "Fehler: Konnte Ihre Position nicht bestimmen.",
+        illuminationDroppedOnTarget = "Leuchtrakete auf Ziel %d abgeworfen (%.0f°, %.1f%s). (%d verbleibend)",
+        illuminationRearmed = "Leuchtraketen aufgefüllt: %d verfügbar.",
+        noGroundTargets = "Keine feindlichen Bodenziele in Reichweite erkannt.",
+        selectTargetFromMenu = "Wählen Sie ein Ziel aus dem Menü zum Markieren.",
+        targetInfo = "Ziel %d: %s %s %s, Peilung %.0f, Reichweite %.1f %s",
+        enabled = "aktiviert",
+        disabled = "deaktiviert",
+        hot = "heiß",
+        cold = "kalt",
+        closing = "schließend",
+        opening = "öffnend",
+        left = "links",
+        right = "rechts",
+        above = "oben",
+        below = "unten",
+        high = "hoch",
+        low = "niedrig",
+        normal = "normal",
+        quiet = "ruhig",
+        verbose = "ausführlich",
+        menu = {
+            mainTitle = "WWII Piloten-Intuition",
+            dogfightAssist = "Luftkampf-Hilfe",
+            enable = "Aktivieren",
+            disable = "Deaktivieren",
+            markerType = "Markierungstyp",
+            smoke = "Rauch",
+            flare = "Leuchtrakete",
+            red = "Rot",
+            green = "Grün",
+            blue = "Blau",
+            white = "Weiß",
+            none = "Keine",
+            airScanning = "Luftscan",
+            groundScanning = "Bodenscan",
+            groundTargeting = "Bodenziel-Erfassung",
+            scanForTargets = "Nach Zielen scannen",
+            markTarget = "Ziel markieren",
+            target = "Ziel %d",
+            illumination = "Beleuchtung (%d übrig)",
+            dropAtMyPosition = "An meiner Position abwerfen",
+            dropOnTarget = "Auf Ziel abwerfen",
+            alertFrequency = "Warnfrequenz",
+            normalFreq = "Normal",
+            quietFreq = "Ruhig",
+            verboseFreq = "Ausführlich",
+            summary = "Zusammenfassung",
+            brief = "Kurz",
+            detailed = "Detailliert",
+            settingsAndGuides = "Einstellungen & Spielerführer",
+            distanceUnits = "Entfernungseinheiten",
+            milesNautical = "Meilen (Nautisch)",
+            kilometers = "Kilometer",
+            playerGuide = "Spielerführer",
+            systemOverview = "Systemübersicht",
+            detectionRanges = "Erkennungsreichweiten",
+            dogfightAssistHelp = "Luftkampf-Hilfe Anleitung",
+            groundTargetingHelp = "Bodenziel-Erfassung Anleitung",
+            formationTips = "Formationstipps",
+            illuminationHelp = "Beleuchtungs-Hilfe",
+            logLevel = "Log-Level",
+            language = "Language / Sprache / Langue",
+            english = "English (Englisch)",
+            german = "Deutsch (German)",
+            french = "Français (Französisch)",
+            spanish = "Español (Spanisch)",
+            russian = "Русский (Russisch)",
+        }
+    },
+    -- French language
+    FR = {
+        welcome = {
+            "Bienvenue dans WWII Intuition du Pilote! Ce système simule la reconnaissance du pilote pour repérer les cibles aériennes et terrestres. Utilisez le menu F10 pour les paramètres.",
+            "Salutations, pilote! WWII Intuition du Pilote est actif. Il vous aide à repérer les bandits et les menaces au sol. Consultez F10 pour les options.",
+            "Intuition du pilote engagée! Simulez la reconnaissance de l'ère WWII. Menu F10 pour les commandes.",
+        },
+        formationJoin = {
+            "Vous avez rejoint le vol avec %s - détection aérienne augmentée à %.0f%s, sol à %.0f%s.",
+            "%s vole maintenant sur votre aile - portées de détection augmentées à %.0f%s air, %.0f%s sol.",
+            "Bienvenue à bord, %s! La formation améliore la détection à %.0f%s pour l'air, %.0f%s pour le sol.",
+            "%s rejoint la formation - les yeux sont plus aiguisés maintenant, %.0f%s air, %.0f%s sol portée.",
+        },
+        formationLeave = {
+            "%s a quitté la formation - détection aérienne réduite à %.0f%s, sol à %.0f%s.",
+            "%s est parti - détection chute à %.0f%s air, %.0f%s sol.",
+            "Formation rompue par %s - portées maintenant %.0f%s air, %.0f%s sol.",
+            "%s s'est détaché - retour à la détection solo: %.0f%s air, %.0f%s sol.",
+        },
+        formationIntegrityLow = {
+            "Intégrité de formation faible! Resserrez-vous.",
+            "Formez-vous, pilotes! Nous sommes trop dispersés.",
+            "Serrez les rangs! Intégrité de formation compromise.",
+            "Revenez en formation, les gars! Nous sommes vulnérables.",
+        },
+        airTargetDetected = {
+            "Bandit %s à %.0f degrés, %.1f %s, anges %.0f (%s)!",
+            "Avion ennemi %s: %.0f degrés, %.1f %s, altitude %.0f (%s).",
+            "Bogey %s à %.0f heures, %.1f %s, anges %.0f (%s).",
+            "Contact hostile %s: %.0f degrés, %.1f %s, %.0f anges (%s).",
+            "Bandit entrant %s: %.0f degrés, %.1f %s, anges %.0f (%s).",
+        },
+        groundTargetDetected = {
+            "%s contact: %s %s à %.0f degrés, %.1f %s.",
+            "Menace au sol: %s %s %s repéré à %.0f degrés, %.1f %s.",
+            "%s unités détectées: %s %s, %.0f degrés, %.1f %s.",
+            "Sol ennemi: %s %s %s au relèvement %.0f, %.1f %s de distance.",
+        },
+        dogfightEngaged = {
+            "Engagé!",
+            "Tally ho! Combat aérien commencé.",
+            "Bandit engagé! Le combat est lancé.",
+            "Combat aérien! Armes chaudes.",
+        },
+        dogfightConcluded = {
+            "Combat aérien terminé.",
+            "Combat terminé. Dégagé.",
+            "Combat aérien terminé. Repos.",
+            "Engagement terminé.",
+        },
+        underFire = {
+            "Sous le feu! Rompez %s!%s",
+            "Prend des coups! Évitez %s!%s",
+            "Coups tirés! Tournez %s maintenant!%s",
+            "Entrant! Rompez %s!%s",
+        },
+        closeFlyingCompliment = {
+            "Beau vol! Formation bout à bout.",
+            "Hey, sympa! C'est du vol serré.",
+            "Excellent travail! C'est proche!",
+            "Doucement, tigre, je ne te connais pas si bien!",
+            "Impressionnant! Bout d'aile à bout d'aile.",
+            "Mouvements fluides! Vol en quartiers serrés.",
+            "Merde, c'est serré! Bon vol.",
+            "Putain, c'est proche! Bien joué.",
+            "Ouf, c'était proche! Bon maniement du manche.",
+            "Tu es collé à mon aile! Excellent vol.",
+        },
+        headOnWarning = {
+            "Ouf! C'était proche!",
+            "Whoa! Presque en face!",
+            "Appel serré! Attention à ce passage.",
+            "Merde, c'était serré! Soyez prudent.",
+            "Sainte merde, presque entré en collision!",
+        },
+        markerSet = {
+            "Marqueur défini sur %s.",
+            "Marqueurs maintenant %s.",
+            "Type de marqueur changé en %s.",
+        },
+        dogfightAssistToggle = {
+            "Assistance combat aérien %s.",
+            "Assistance combat aérien %s.",
+        },
+        activeMessagingToggle = {
+            "Messagerie active %s.",
+            "Alertes en direct %s.",
+        },
+        airScanningToggle = {
+            "Scan aérien %s.",
+            "Détection aérienne %s.",
+        },
+        groundScanningToggle = {
+            "Scan au sol %s.",
+            "Détection au sol %s.",
+        },
+        alertFrequencyToggle = {
+            "Fréquence d'alerte définie sur %s.",
+            "Alertes maintenant %s.",
+        },
+        summaryCooldown = {
+            "Résumé en temps de recharge.",
+            "Attendez un peu pour un autre résumé.",
+        },
+        noThreats = {
+            "Aucune menace active.",
+            "Tout est clair.",
+            "Situation normale.",
+        },
+        systemActive = "WWII Intuition du Pilote actif! Utilisez le menu F10 pour les paramètres.",
+        logLevelSet = "Niveau de log défini sur: %s",
+        distanceUnitsSet = "Unités de distance définies sur %s.",
+        targetNotAvailable = "Cible %d non disponible.",
+        markedTarget = "Cible %d marquée.",
+        noIlluminationFlares = "Plus de fusées éclairantes. Atterrissez sur une base aérienne amie pour vous réarmer.",
+        illuminationNotReady = "Illumination pas prête. Attendez %d secondes.",
+        cannotDeterminePosition = "Impossible de déterminer la position pour le largage de fusée éclairante.",
+        cannotDetermineAltitude = "Impossible de déterminer l'altitude pour le largage de fusée éclairante.",
+        illuminationDropped = "Fusée éclairante larguée à votre position. (%d restantes)",
+        cannotDetermineTargetPosition = "Impossible de déterminer la position de la cible pour le largage de fusée éclairante.",
+        errorCouldNotDeterminePosition = "Erreur: Impossible de déterminer votre position.",
+        illuminationDroppedOnTarget = "Fusée éclairante larguée sur cible %d (%.0f°, %.1f%s). (%d restantes)",
+        illuminationRearmed = "Fusées éclairantes réarmées: %d disponibles.",
+        noGroundTargets = "Aucune cible terrestre ennemie détectée à portée.",
+        selectTargetFromMenu = "Sélectionnez une cible dans le menu pour la marquer.",
+        targetInfo = "Cible %d: %s %s %s, Relèvement %.0f, Portée %.1f %s",
+        enabled = "activé",
+        disabled = "désactivé",
+        hot = "chaud",
+        cold = "froid",
+        closing = "rapprochement",
+        opening = "éloignement",
+        left = "gauche",
+        right = "droite",
+        above = "au-dessus",
+        below = "en-dessous",
+        high = "haut",
+        low = "bas",
+        normal = "normal",
+        quiet = "calme",
+        verbose = "verbeux",
+        menu = {
+            mainTitle = "Intuition du Pilote WWII",
+            dogfightAssist = "Assistance Combat Aérien",
+            enable = "Activer",
+            disable = "Désactiver",
+            markerType = "Type de Marqueur",
+            smoke = "Fumée",
+            flare = "Fusée",
+            red = "Rouge",
+            green = "Vert",
+            blue = "Bleu",
+            white = "Blanc",
+            none = "Aucun",
+            airScanning = "Scan Aérien",
+            groundScanning = "Scan au Sol",
+            groundTargeting = "Ciblage au Sol",
+            scanForTargets = "Scanner les Cibles",
+            markTarget = "Marquer Cible",
+            target = "Cible %d",
+            illumination = "Illumination (%d restantes)",
+            dropAtMyPosition = "Larguer à ma Position",
+            dropOnTarget = "Larguer sur Cible",
+            alertFrequency = "Fréquence d'Alerte",
+            normalFreq = "Normal",
+            quietFreq = "Calme",
+            verboseFreq = "Verbeux",
+            summary = "Résumé",
+            brief = "Bref",
+            detailed = "Détaillé",
+            settingsAndGuides = "Paramètres & Guides Joueurs",
+            distanceUnits = "Unités de Distance",
+            milesNautical = "Miles (Nautiques)",
+            kilometers = "Kilomètres",
+            playerGuide = "Guide du Joueur",
+            systemOverview = "Aperçu du Système",
+            detectionRanges = "Portées de Détection",
+            dogfightAssistHelp = "Aide Combat Aérien",
+            groundTargetingHelp = "Aide Ciblage au Sol",
+            formationTips = "Conseils Formation",
+            illuminationHelp = "Aide Illumination",
+            logLevel = "Niveau de Log",
+            language = "Language / Sprache / Langue",
+            english = "English (Anglais)",
+            german = "Deutsch (Allemand)",
+            french = "Français (French)",
+            spanish = "Español (Espagnol)",
+            russian = "Русский (Russe)",
+        }
+    },
+    -- Spanish language
+    ES = {
+        welcome = {
+            "¡Bienvenido a WWII Intuición del Piloto! Este sistema simula el reconocimiento del piloto para detectar objetivos aéreos y terrestres. Use el menú F10 para configuración.",
+            "¡Saludos, piloto! WWII Intuición del Piloto está activo. Te ayuda a detectar bandidos y amenazas terrestres. Revisa F10 para opciones.",
+            "¡Intuición del piloto activada! Simula reconocimiento de la era WWII. Menú F10 para controles.",
+        },
+        formationJoin = {
+            "Te has unido al vuelo con %s - detección aérea aumentada a %.0f%s, terrestre a %.0f%s.",
+            "%s ahora vuela en tu ala - rangos de detección aumentados a %.0f%s aéreo, %.0f%s terrestre.",
+            "¡Bienvenido a bordo, %s! La formación mejora detección a %.0f%s para aéreo, %.0f%s para terrestre.",
+            "%s se une a la formación - ojos más agudos ahora, %.0f%s aéreo, %.0f%s terrestre rango.",
+        },
+        formationLeave = {
+            "%s dejó la formación - detección aérea reducida a %.0f%s, terrestre a %.0f%s.",
+            "%s se fue - detección cae a %.0f%s aéreo, %.0f%s terrestre.",
+            "Formación rota por %s - rangos ahora %.0f%s aéreo, %.0f%s terrestre.",
+            "%s se ha separado - vuelta a detección solitaria: %.0f%s aéreo, %.0f%s terrestre.",
+        },
+        formationIntegrityLow = {
+            "¡Integridad de formación baja! Aprieten.",
+            "¡Formen, pilotos! Estamos demasiado dispersos.",
+            "¡Cierren filas! Integridad de formación comprometida.",
+            "¡Vuelvan a la formación, muchachos! Somos vulnerables.",
+        },
+        airTargetDetected = {
+            "Bandido %s a %.0f grados, %.1f %s, ángeles %.0f (%s)!",
+            "Aeronave enemiga %s: %.0f grados, %.1f %s, altitud %.0f (%s).",
+            "Bogey %s a las %.0f en punto, %.1f %s fuera, ángeles %.0f (%s).",
+            "Contacto hostil %s: %.0f grados, %.1f %s, %.0f ángeles (%s).",
+            "Bandido entrante %s: %.0f grados, %.1f %s, ángeles %.0f (%s).",
+        },
+        groundTargetDetected = {
+            "%s contacto: %s %s a %.0f grados, %.1f %s.",
+            "Amenaza terrestre: %s %s %s avistado a %.0f grados, %.1f %s.",
+            "%s unidades detectadas: %s %s, %.0f grados, %.1f %s.",
+            "Terreno enemigo: %s %s %s en rumbo %.0f, %.1f %s de distancia.",
+        },
+        dogfightEngaged = {
+            "¡Enganchado!",
+            "¡Tally ho! Combate aéreo iniciado.",
+            "¡Bandido enganchado! La pelea está en marcha.",
+            "¡Combate aéreo! Armas calientes.",
+        },
+        dogfightConcluded = {
+            "Combate aéreo concluido.",
+            "Pelea terminada. Despejado.",
+            "Combate aéreo terminado. Descanso.",
+            "Enganche terminado.",
+        },
+        underFire = {
+            "¡Bajo fuego! ¡Rompe %s!%s",
+            "¡Recibiendo impactos! ¡Evade %s!%s",
+            "¡Disparos! ¡Gira %s ahora!%s",
+            "¡Entrante! ¡Rompe %s!%s",
+        },
+        closeFlyingCompliment = {
+            "¡Buen vuelo! Formación punta con punta.",
+            "¡Hey, bien! Eso es vuelo cerrado.",
+            "¡Excelente trabajo! ¡Qué cerca!",
+            "¡Despacio ahí tigre, no te conozco tan bien!",
+            "¡Impresionante! Punta de ala con punta de ala.",
+            "¡Movimientos suaves! Vuelo en cuartos cerrados.",
+            "¡Diablos, qué ajustado! Buen vuelo.",
+            "¡Mierda, qué cerca! Bien hecho.",
+            "¡Uf, eso estuvo cerca! Buen control del stick.",
+            "¡Estás pegado a mi ala! Excelente vuelo.",
+        },
+        headOnWarning = {
+            "¡Uf! ¡Eso estuvo cerca!",
+            "¡Whoa! ¡Casi de frente!",
+            "¡Llamada cerrada! Cuidado con ese pase.",
+            "¡Diablos, eso estuvo ajustado! Ten cuidado.",
+            "¡Santo cielo, casi colisionamos!",
+        },
+        markerSet = {
+            "Marcador establecido en %s.",
+            "Marcadores ahora %s.",
+            "Tipo de marcador cambiado a %s.",
+        },
+        dogfightAssistToggle = {
+            "Asistencia de combate aéreo %s.",
+            "Asistencia de combate aéreo %s.",
+        },
+        activeMessagingToggle = {
+            "Mensajería activa %s.",
+            "Alertas en vivo %s.",
+        },
+        airScanningToggle = {
+            "Escaneo aéreo %s.",
+            "Detección aérea %s.",
+        },
+        groundScanningToggle = {
+            "Escaneo terrestre %s.",
+            "Detección terrestre %s.",
+        },
+        alertFrequencyToggle = {
+            "Frecuencia de alerta establecida en %s.",
+            "Alertas ahora %s.",
+        },
+        summaryCooldown = {
+            "Resumen en tiempo de reutilización.",
+            "Espera un poco para otro resumen.",
+        },
+        noThreats = {
+            "Sin amenazas activas.",
+            "Todo despejado.",
+            "Situación normal.",
+        },
+        systemActive = "¡WWII Intuición del Piloto activo! Use el menú F10 para configuración.",
+        logLevelSet = "Nivel de registro establecido en: %s",
+        distanceUnitsSet = "Unidades de distancia establecidas en %s.",
+        targetNotAvailable = "Objetivo %d no disponible.",
+        markedTarget = "Objetivo %d marcado.",
+        noIlluminationFlares = "No quedan bengalas de iluminación. Aterriza en una base aérea amiga para rearmarte.",
+        illuminationNotReady = "Iluminación no lista. Espera %d segundos.",
+        cannotDeterminePosition = "No se puede determinar la posición para lanzar bengala de iluminación.",
+        cannotDetermineAltitude = "No se puede determinar la altitud para lanzar bengala de iluminación.",
+        illuminationDropped = "Bengala de iluminación lanzada en tu posición. (%d restantes)",
+        cannotDetermineTargetPosition = "No se puede determinar la posición del objetivo para lanzar bengala de iluminación.",
+        errorCouldNotDeterminePosition = "Error: No se pudo determinar tu posición.",
+        illuminationDroppedOnTarget = "Bengala de iluminación lanzada en Objetivo %d (%.0f°, %.1f%s). (%d restantes)",
+        illuminationRearmed = "Bengalas de iluminación rearmadas: %d disponibles.",
+        noGroundTargets = "No se detectaron objetivos terrestres enemigos en rango.",
+        selectTargetFromMenu = "Selecciona un objetivo del menú para marcarlo.",
+        targetInfo = "Objetivo %d: %s %s %s, Rumbo %.0f, Rango %.1f %s",
+        enabled = "activado",
+        disabled = "desactivado",
+        hot = "caliente",
+        cold = "frío",
+        closing = "acercándose",
+        opening = "alejándose",
+        left = "izquierda",
+        right = "derecha",
+        above = "arriba",
+        below = "abajo",
+        high = "alto",
+        low = "bajo",
+        normal = "normal",
+        quiet = "silencioso",
+        verbose = "detallado",
+        menu = {
+            mainTitle = "Intuición del Piloto WWII",
+            dogfightAssist = "Asistencia Combate Aéreo",
+            enable = "Activar",
+            disable = "Desactivar",
+            markerType = "Tipo de Marcador",
+            smoke = "Humo",
+            flare = "Bengala",
+            red = "Rojo",
+            green = "Verde",
+            blue = "Azul",
+            white = "Blanco",
+            none = "Ninguno",
+            airScanning = "Escaneo Aéreo",
+            groundScanning = "Escaneo Terrestre",
+            groundTargeting = "Objetivo Terrestre",
+            scanForTargets = "Escanear Objetivos",
+            markTarget = "Marcar Objetivo",
+            target = "Objetivo %d",
+            illumination = "Iluminación (%d restantes)",
+            dropAtMyPosition = "Lanzar en Mi Posición",
+            dropOnTarget = "Lanzar en Objetivo",
+            alertFrequency = "Frecuencia de Alerta",
+            normalFreq = "Normal",
+            quietFreq = "Silencioso",
+            verboseFreq = "Detallado",
+            summary = "Resumen",
+            brief = "Breve",
+            detailed = "Detallado",
+            settingsAndGuides = "Configuración y Guías",
+            distanceUnits = "Unidades de Distancia",
+            milesNautical = "Millas (Náuticas)",
+            kilometers = "Kilómetros",
+            playerGuide = "Guía del Jugador",
+            systemOverview = "Resumen del Sistema",
+            detectionRanges = "Rangos de Detección",
+            dogfightAssistHelp = "Ayuda Combate Aéreo",
+            groundTargetingHelp = "Ayuda Objetivo Terrestre",
+            formationTips = "Consejos de Formación",
+            illuminationHelp = "Ayuda de Iluminación",
+            logLevel = "Nivel de Registro",
+            language = "Language / Sprache / Langue",
+            english = "English (Inglés)",
+            german = "Deutsch (Alemán)",
+            french = "Français (Francés)",
+            spanish = "Español (Spanish)",
+            russian = "Русский (Ruso)",
+        }
+    },
+    -- Russian language
+    RU = {
+        welcome = {
+            "Добро пожаловать в WWII Интуиция Пилота! Эта система имитирует разведку пилота для обнаружения воздушных и наземных целей. Используйте меню F10 для настроек.",
+            "Приветствую, пилот! WWII Интуиция Пилота активна. Она поможет вам обнаружить бандитов и наземные угрозы. Проверьте F10 для опций.",
+            "Интуиция пилота активирована! Имитируйте разведку эпохи WWII. Меню F10 для управления.",
+        },
+        formationJoin = {
+            "Вы присоединились к полету с %s - обнаружение воздушных целей увеличено до %.0f%s, наземных до %.0f%s.",
+            "%s теперь летит на вашем крыле - дальности обнаружения увеличены до %.0f%s воздух, %.0f%s земля.",
+            "Добро пожаловать на борт, %s! Формация улучшает обнаружение до %.0f%s для воздуха, %.0f%s для земли.",
+            "%s присоединяется к формации - глаза острее теперь, %.0f%s воздух, %.0f%s земля дальность.",
+        },
+        formationLeave = {
+            "%s покинул формацию - обнаружение воздушных целей снижено до %.0f%s, наземных до %.0f%s.",
+            "%s ушел - обнаружение падает до %.0f%s воздух, %.0f%s земля.",
+            "Формация разорвана %s - дальности теперь %.0f%s воздух, %.0f%s земля.",
+            "%s отделился - обратно к одиночному обнаружению: %.0f%s воздух, %.0f%s земля.",
+        },
+        formationIntegrityLow = {
+            "Целостность формации низкая! Сжаться.",
+            "Стройтесь, пилоты! Мы слишком разбросаны.",
+            "Сомкните ряды! Целостность формации под угрозой.",
+            "Вернитесь в формацию, ребята! Мы уязвимы.",
+        },
+        airTargetDetected = {
+            "Бандит %s на %.0f градусов, %.1f %s, ангелы %.0f (%s)!",
+            "Вражеский самолет %s: %.0f градусов, %.1f %s, высота %.0f (%s).",
+            "Боги %s на %.0f часов, %.1f %s, ангелы %.0f (%s).",
+            "Враждебный контакт %s: %.0f градусов, %.1f %s, %.0f ангелов (%s).",
+            "Бандит входящий %s: %.0f градусов, %.1f %s, ангелы %.0f (%s).",
+        },
+        groundTargetDetected = {
+            "%s контакт: %s %s на %.0f градусов, %.1f %s.",
+            "Наземная угроза: %s %s %s замечен на %.0f градусов, %.1f %s.",
+            "%s единицы обнаружены: %s %s, %.0f градусов, %.1f %s.",
+            "Вражеская земля: %s %s %s на пеленге %.0f, %.1f %s расстояние.",
+        },
+        dogfightEngaged = {
+            "Вступил!",
+            "Талли хо! Воздушный бой начат.",
+            "Бандит вступил! Бой идет.",
+            "Воздушный бой! Оружие горячо.",
+        },
+        dogfightConcluded = {
+            "Воздушный бой завершен.",
+            "Бой окончен. Чисто.",
+            "Воздушный бой закончен. Отбой.",
+            "Вступление завершено.",
+        },
+        underFire = {
+            "Под огнем! Разрывай %s!%s",
+            "Получаем попадания! Уклоняйся %s!%s",
+            "Выстрелы! Поверни %s сейчас!%s",
+            "Входящий! Разрывай %s!%s",
+        },
+        closeFlyingCompliment = {
+            "Отличный полет! Формация концом к концу.",
+            "Эй, хорошо! Это тесный полет.",
+            "Отличная работа! Как близко!",
+            "Полегче там, тигр, я тебя так хорошо не знаю!",
+            "Впечатляюще! Законцовка к законцовке.",
+            "Плавные движения! Полет в тесных четвертях.",
+            "Черт, как тесно! Хороший полет.",
+            "Святые небеса, как близко! Отлично.",
+            "Уф, это было близко! Хорошая работа ручкой.",
+            "Ты приклеен к моему крылу! Отличный полет.",
+        },
+        headOnWarning = {
+            "Уф! Это было близко!",
+            "Воу! Почти лобовое!",
+            "Близкий вызов! Осторожнее с этим проходом.",
+            "Черт, это было тесно! Будь осторожен.",
+            "Святые небеса, почти столкнулись!",
+        },
+        markerSet = {
+            "Маркер установлен на %s.",
+            "Маркеры теперь %s.",
+            "Тип маркера изменен на %s.",
+        },
+        dogfightAssistToggle = {
+            "Помощь в воздушном бою %s.",
+            "Ассистенс воздушного боя %s.",
+        },
+        activeMessagingToggle = {
+            "Активные сообщения %s.",
+            "Живые оповещения %s.",
+        },
+        airScanningToggle = {
+            "Воздушное сканирование %s.",
+            "Воздушное обнаружение %s.",
+        },
+        groundScanningToggle = {
+            "Наземное сканирование %s.",
+            "Наземное обнаружение %s.",
+        },
+        alertFrequencyToggle = {
+            "Частота оповещений установлена на %s.",
+            "Оповещения теперь %s.",
+        },
+        summaryCooldown = {
+            "Резюме на перезарядке.",
+            "Подожди немного для другого резюме.",
+        },
+        noThreats = {
+            "Нет активных угроз.",
+            "Все чисто.",
+            "Ситуация нормальная.",
+        },
+        systemActive = "WWII Интуиция Пилота активна! Используйте меню F10 для настроек.",
+        logLevelSet = "Уровень логирования установлен на: %s",
+        distanceUnitsSet = "Единицы расстояния установлены на %s.",
+        targetNotAvailable = "Цель %d недоступна.",
+        markedTarget = "Цель %d отмечена.",
+        noIlluminationFlares = "Осветительные ракеты закончились. Приземлитесь на дружественную авиабазу для перевооружения.",
+        illuminationNotReady = "Освещение не готово. Подождите %d секунд.",
+        cannotDeterminePosition = "Невозможно определить позицию для сброса осветительной ракеты.",
+        cannotDetermineAltitude = "Невозможно определить высоту для сброса осветительной ракеты.",
+        illuminationDropped = "Осветительная ракета сброшена на вашей позиции. (%d осталось)",
+        cannotDetermineTargetPosition = "Невозможно определить позицию цели для сброса осветительной ракеты.",
+        errorCouldNotDeterminePosition = "Ошибка: Не удалось определить вашу позицию.",
+        illuminationDroppedOnTarget = "Осветительная ракета сброшена на Цель %d (%.0f°, %.1f%s). (%d осталось)",
+        illuminationRearmed = "Осветительные ракеты перезаряжены: %d доступно.",
+        noGroundTargets = "Вражеские наземные цели в радиусе не обнаружены.",
+        selectTargetFromMenu = "Выберите цель из меню, чтобы отметить её.",
+        targetInfo = "Цель %d: %s %s %s, Пеленг %.0f, Дальность %.1f %s",
+        enabled = "включено",
+        disabled = "отключено",
+        hot = "горячий",
+        cold = "холодный",
+        closing = "сближение",
+        opening = "расхождение",
+        left = "слева",
+        right = "справа",
+        above = "сверху",
+        below = "снизу",
+        high = "высокий",
+        low = "низкий",
+        normal = "нормальный",
+        quiet = "тихий",
+        verbose = "подробный",
+        menu = {
+            mainTitle = "Интуиция Пилота WWII",
+            dogfightAssist = "Помощь Воздушный Бой",
+            enable = "Включить",
+            disable = "Отключить",
+            markerType = "Тип Маркера",
+            smoke = "Дым",
+            flare = "Ракета",
+            red = "Красный",
+            green = "Зеленый",
+            blue = "Синий",
+            white = "Белый",
+            none = "Нет",
+            airScanning = "Воздушное Сканирование",
+            groundScanning = "Наземное Сканирование",
+            groundTargeting = "Наземное Наведение",
+            scanForTargets = "Сканировать Цели",
+            markTarget = "Отметить Цель",
+            target = "Цель %d",
+            illumination = "Освещение (%d осталось)",
+            dropAtMyPosition = "Сбросить на Моей Позиции",
+            dropOnTarget = "Сбросить на Цель",
+            alertFrequency = "Частота Оповещений",
+            normalFreq = "Нормальная",
+            quietFreq = "Тихая",
+            verboseFreq = "Подробная",
+            summary = "Резюме",
+            brief = "Краткое",
+            detailed = "Подробное",
+            settingsAndGuides = "Настройки и Руководства",
+            distanceUnits = "Единицы Расстояния",
+            milesNautical = "Мили (Морские)",
+            kilometers = "Километры",
+            playerGuide = "Руководство Игрока",
+            systemOverview = "Обзор Системы",
+            detectionRanges = "Дальности Обнаружения",
+            dogfightAssistHelp = "Помощь Воздушный Бой",
+            groundTargetingHelp = "Помощь Наземное Наведение",
+            formationTips = "Советы по Формации",
+            illuminationHelp = "Помощь Освещение",
+            logLevel = "Уровень Логирования",
+            language = "Language / Sprache / Langue",
+            english = "English (Английский)",
+            german = "Deutsch (Немецкий)",
+            french = "Français (Французский)",
+            spanish = "Español (Испанский)",
+            russian = "Русский (Russian)",
+        }
+    }
 }
+
+-- Backward compatibility: keep old reference for any direct usage
+PILOT_INTUITION_MESSAGES = PILOT_INTUITION_LANGUAGES.EN
 
 -- Pilot Intuition Class
 PilotIntuition = {
@@ -268,13 +1119,61 @@ function PilotIntuition:FormatDistance(distanceMeters, playerKey)
     end
 end
 
-function PilotIntuition:GetRandomMessage(messageType, params)
-    local messages = PILOT_INTUITION_MESSAGES[messageType]
-    if not messages or #messages == 0 then
-        env.info("PilotIntuition: No messages for type " .. tostring(messageType))
+-- Helper function to get player's language
+function PilotIntuition:GetPlayerLanguage(playerKey)
+    if playerKey and self.players[playerKey] and self.players[playerKey].language then
+        return self.players[playerKey].language
+    end
+    return PILOT_INTUITION_CONFIG.defaultLanguage
+end
+
+-- Helper function to get translated text (non-array messages)
+function PilotIntuition:GetText(textKey, playerKey)
+    local lang = self:GetPlayerLanguage(playerKey)
+    local langTable = PILOT_INTUITION_LANGUAGES[lang] or PILOT_INTUITION_LANGUAGES.EN
+    
+    -- Check if it's a nested key (e.g., "menu.mainTitle")
+    if string.find(textKey, "%.") then
+        local parts = {}
+        for part in string.gmatch(textKey, "[^%.]+") do
+            table.insert(parts, part)
+        end
+        
+        local value = langTable
+        for _, part in ipairs(parts) do
+            if value and type(value) == "table" then
+                value = value[part]
+            else
+                return textKey  -- Fallback to key if not found
+            end
+        end
+        return value or textKey
+    end
+    
+    return langTable[textKey] or textKey
+end
+
+-- Get random message with player language support
+function PilotIntuition:GetRandomMessage(messageType, params, playerKey)
+    local lang = self:GetPlayerLanguage(playerKey)
+    local langTable = PILOT_INTUITION_LANGUAGES[lang] or PILOT_INTUITION_LANGUAGES.EN
+    local messages = langTable[messageType]
+    
+    if not messages then
+        env.info("PilotIntuition: No messages for type " .. tostring(messageType) .. " in language " .. lang)
         return "Message type not found: " .. tostring(messageType)
     end
-    local msg = messages[math.random(#messages)]
+    
+    -- Handle both array messages and single string messages
+    local msg
+    if type(messages) == "table" and #messages > 0 then
+        msg = messages[math.random(#messages)]
+    elseif type(messages) == "string" then
+        msg = messages
+    else
+        return "Invalid message format for: " .. tostring(messageType)
+    end
+    
     env.info("PilotIntuition: Selected message: " .. msg)
     if params then
         msg = string.format(msg, unpack(params))
@@ -470,6 +1369,7 @@ function PilotIntuition:ScanTargets()
                     threateningBandits = {},  -- Reusable table for detected threats
                     lastMultipleBanditsWarningTime = 0,  -- Cooldown for "Multiple bandits in vicinity!" message
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,  -- Player's distance unit preference
+                    language = PILOT_INTUITION_CONFIG.defaultLanguage,  -- Player's language preference
                 }
             end
             
@@ -678,7 +1578,7 @@ function PilotIntuition:SetupMenu()
                     if not self.playerMenus[groupName] then
                         PILog(LOG_INFO, "PilotIntuition: Creating menu for existing player group: " .. groupName)
                         self.playerMenus[groupName] = self:BuildGroupMenus(group)
-                        MESSAGE:New("WWII Pilot Intuition active! Use F10 menu for settings.", 10):ToGroup(group)
+                        MESSAGE:New(self:GetText("systemActive", group:GetUnit(1):GetPlayerName()), 10):ToGroup(group)
                     end
                 end
             end
@@ -768,6 +1668,14 @@ function PilotIntuition:BuildGroupMenus(group)
     
     -- Admin Settings submenu (placed last)
     local adminMenu = MENU_GROUP:New(group, "Settings & Player Guides", playerSubMenu)
+    
+    -- Language selection submenu (under admin)
+    local langMenu = MENU_GROUP:New(group, "Language / Sprache / Langue", adminMenu)
+    MENU_GROUP_COMMAND:New(group, "English", langMenu, function() self:MenuSetPlayerLanguage(unit, "EN") end)
+    MENU_GROUP_COMMAND:New(group, "Deutsch (German)", langMenu, function() self:MenuSetPlayerLanguage(unit, "DE") end)
+    MENU_GROUP_COMMAND:New(group, "Français (French)", langMenu, function() self:MenuSetPlayerLanguage(unit, "FR") end)
+    MENU_GROUP_COMMAND:New(group, "Español (Spanish)", langMenu, function() self:MenuSetPlayerLanguage(unit, "ES") end)
+    MENU_GROUP_COMMAND:New(group, "Русский (Russian)", langMenu, function() self:MenuSetPlayerLanguage(unit, "RU") end)
     
     -- Distance units submenu (under admin)
     local distMenu = MENU_GROUP:New(group, "Distance Units", adminMenu)
@@ -1020,7 +1928,7 @@ function PilotIntuition:WireEventHandlers()
             
             local client = unit:GetClient()
             if client and prevCount < PILOT_INTUITION_CONFIG.illuminationFlaresDefault then
-                MESSAGE:New("Illumination flares rearmed: " .. PILOT_INTUITION_CONFIG.illuminationFlaresDefault .. " available.", 10):ToClient(client)
+                MESSAGE:New(string.format(self:GetText("illuminationRearmed", clientName), PILOT_INTUITION_CONFIG.illuminationFlaresDefault), 10):ToClient(client)
             end
             
             PILog(LOG_INFO, "PilotIntuition: Player " .. playerName .. " rearmed illumination flares at friendly airbase")
@@ -1090,6 +1998,8 @@ function PilotIntuition:SetupPlayerMenus()
                     previousWingmen = 0,
                     frequencyMultiplier = 1.0,
                     threateningBandits = {},  -- Reusable table for detected threats
+                    distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,
+                    language = PILOT_INTUITION_CONFIG.defaultLanguage,
                 }
             end
             
@@ -1192,7 +2102,7 @@ function PilotIntuition:MenuSetPlayerMarker(playerUnit, markerType)
         local client = playerUnit:GetClient()
         if client then
             local niceType = markerType:gsub("_", " "):gsub("(%w)(%w*)", function(first, rest) return first:upper() .. rest:lower() end)
-            MESSAGE:New(self:GetRandomMessage("markerSet", {niceType}), 10):ToClient(client)
+            MESSAGE:New(self:GetRandomMessage("markerSet", {niceType}, playerName), 10):ToClient(client)
         end
     end
 end
@@ -1228,7 +2138,7 @@ function PilotIntuition:MenuSetPlayerDogfightAssist(playerUnit, onoff)
         env.info("PilotIntuition: Getting client: " .. tostring(client))
         if client then
             env.info("PilotIntuition: Sending message to client")
-            MESSAGE:New(self:GetRandomMessage("dogfightAssistToggle", {status}), 10):ToClient(client)
+            MESSAGE:New(self:GetRandomMessage("dogfightAssistToggle", {status}, playerName), 10):ToClient(client)
         else
             env.info("PilotIntuition: ERROR - Could not get client")
         end
@@ -1254,7 +2164,7 @@ function PilotIntuition:MenuSetPlayerAirScanning(playerUnit, onoff)
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
         if client then
-            MESSAGE:New(self:GetRandomMessage("airScanningToggle", {status}), 10):ToClient(client)
+            MESSAGE:New(self:GetRandomMessage("airScanningToggle", {status}, playerName), 10):ToClient(client)
         end
     end
 end
@@ -1276,7 +2186,7 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
         if client then
-            MESSAGE:New(self:GetRandomMessage("groundScanningToggle", {status}), 10):ToClient(client)
+            MESSAGE:New(self:GetRandomMessage("groundScanningToggle", {status}, playerName), 10):ToClient(client)
         end
     end
 end
@@ -1307,7 +2217,7 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
         self.players[playerKey].frequencyMultiplier = multiplier
         local client = playerUnit:GetClient()
         if client then
-            MESSAGE:New(self:GetRandomMessage("alertFrequencyToggle", {mode}), 10):ToClient(client)
+            MESSAGE:New(self:GetRandomMessage("alertFrequencyToggle", {mode}, playerName), 10):ToClient(client)
         end
     end
 end
@@ -1329,7 +2239,42 @@ function PilotIntuition:MenuSetPlayerDistanceUnit(playerUnit, unit)
         local client = playerUnit:GetClient()
         if client then
             local unitName = unit == "mi" and "Miles (Nautical)" or "Kilometers"
-            MESSAGE:New("Distance units set to " .. unitName .. ".", 10):ToClient(client)
+            MESSAGE:New(string.format(self:GetText("distanceUnitsSet", playerKey), unitName), 10):ToClient(client)
+        end
+    end
+end
+
+function PilotIntuition:MenuSetPlayerLanguage(playerUnit, language)
+    env.info("====== PilotIntuition: MenuSetPlayerLanguage CALLED ======")
+    env.info("PilotIntuition: playerUnit = " .. tostring(playerUnit))
+    if playerUnit then
+        env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
+    end
+    env.info("PilotIntuition: language = " .. tostring(language))
+    if not playerUnit then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided")
+        return 
+    end
+    local playerKey = self:GetPlayerDataKey(playerUnit)
+    if playerKey and self.players[playerKey] then
+        -- Validate language
+        if not PILOT_INTUITION_LANGUAGES[language] then
+            env.info("PilotIntuition: Invalid language: " .. tostring(language))
+            return
+        end
+        
+        self.players[playerKey].language = language
+        local client = playerUnit:GetClient()
+        if client then
+            local langNames = {
+                EN = "English",
+                DE = "Deutsch",
+                FR = "Français",
+                ES = "Español",
+                RU = "Русский"
+            }
+            local msg = string.format("Language set to %s. Menu text will update on respawn/reconnect.", langNames[language] or language)
+            MESSAGE:New(msg, 10):ToClient(client)
         end
     end
 end
@@ -1415,9 +2360,9 @@ function PilotIntuition:MenuScanGroundTargets(playerUnit)
     end
 
     if #scanned == 0 then
-        MESSAGE:New("No enemy ground targets detected in range.", 10):ToClient(client)
+        MESSAGE:New(self:GetText("noGroundTargets", playerName), 10):ToClient(client)
     else
-        MESSAGE:New("Select a target from the menu to mark it.", 10):ToClient(client)
+        MESSAGE:New(self:GetText("selectTargetFromMenu", playerName), 10):ToClient(client)
     end
 end
 
