@@ -1453,7 +1453,7 @@ function PilotIntuition:ScanTargets()
     for _, info in ipairs(activeClients) do
         local playerName = info.name
         if self.players[playerName] and not self.players[playerName].hasBeenWelcomed and PILOT_INTUITION_CONFIG.showWelcomeMessage then
-            MESSAGE:New(self:GetRandomMessage("welcome"), 10):ToClient(info.client)
+            MESSAGE:New(self:GetRandomMessage("welcome", nil, playerName), 10):ToClient(info.client)
             self.players[playerName].hasBeenWelcomed = true
         end
     end
@@ -1597,101 +1597,106 @@ function PilotIntuition:BuildGroupMenus(group)
         return nil
     end
     
-    -- Create the main menu for this group
-    local playerSubMenu = MENU_GROUP:New(group, "WWII Pilot Intuition")
-    PILog(LOG_INFO, "PilotIntuition: Main menu created for group: " .. group:GetName())
-    
-    -- Get first unit in group for callbacks
+    -- Get first unit in group for callbacks and language
     local unit = group:GetUnit(1)
     if not unit then
         PILog(LOG_ERROR, "PilotIntuition: WARNING - No unit found in group")
-        return playerSubMenu
+        return nil
     end
     
+    local playerKey = self:GetPlayerDataKey(unit)
+    
+    -- Create the main menu for this group with translated text
+    local playerSubMenu = MENU_GROUP:New(group, self:GetText("menu.mainTitle", playerKey))
+    PILog(LOG_INFO, "PilotIntuition: Main menu created for group: " .. group:GetName())
+    
     -- Dogfight Assist submenu
-    local dogfightMenu = MENU_GROUP:New(group, "Dogfight Assist", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Enable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, "Disable", dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, false) end)
+    local dogfightMenu = MENU_GROUP:New(group, self:GetText("menu.dogfightAssist", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, false) end)
     
     -- Marker Type submenu
-    local markerMenu = MENU_GROUP:New(group, "Marker Type", playerSubMenu)
-    local smokeMenu = MENU_GROUP:New(group, "Smoke", markerMenu)
-    MENU_GROUP_COMMAND:New(group, "Red", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_red") end)
-    MENU_GROUP_COMMAND:New(group, "Green", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_green") end)
-    MENU_GROUP_COMMAND:New(group, "Blue", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_blue") end)
-    MENU_GROUP_COMMAND:New(group, "White", smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_white") end)
-    local flareMenu = MENU_GROUP:New(group, "Flare", markerMenu)
-    MENU_GROUP_COMMAND:New(group, "Red", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_red") end)
-    MENU_GROUP_COMMAND:New(group, "Green", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_green") end)
-    MENU_GROUP_COMMAND:New(group, "White", flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_white") end)
-    MENU_GROUP_COMMAND:New(group, "None", markerMenu, function() self:MenuSetPlayerMarker(unit, "none") end)
+    local markerMenu = MENU_GROUP:New(group, self:GetText("menu.markerType", playerKey), playerSubMenu)
+    local smokeMenu = MENU_GROUP:New(group, self:GetText("menu.smoke", playerKey), markerMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_red") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_green") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.blue", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_blue") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_white") end)
+    local flareMenu = MENU_GROUP:New(group, self:GetText("menu.flare", playerKey), markerMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_red") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_green") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_white") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.none", playerKey), markerMenu, function() self:MenuSetPlayerMarker(unit, "none") end)
     
     -- Air scanning submenu
-    local airScanMenu = MENU_GROUP:New(group, "Air Scanning", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Enable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, "Disable", airScanMenu, function() self:MenuSetPlayerAirScanning(unit, false) end)
+    local airScanMenu = MENU_GROUP:New(group, self:GetText("menu.airScanning", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), airScanMenu, function() self:MenuSetPlayerAirScanning(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), airScanMenu, function() self:MenuSetPlayerAirScanning(unit, false) end)
     
     -- Ground scanning submenu
-    local groundScanMenu = MENU_GROUP:New(group, "Ground Scanning", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Enable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, "Disable", groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, false) end)
+    local groundScanMenu = MENU_GROUP:New(group, self:GetText("menu.groundScanning", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, true) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, false) end)
     
     -- Ground targeting submenu
-    local groundMenu = MENU_GROUP:New(group, "Ground Targeting", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Scan for Targets", groundMenu, function() self:MenuScanGroundTargets(unit) end)
-    local markMenu = MENU_GROUP:New(group, "Mark Target", groundMenu)
+    local groundMenu = MENU_GROUP:New(group, self:GetText("menu.groundTargeting", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.scanForTargets", playerKey), groundMenu, function() self:MenuScanGroundTargets(unit) end)
+    local markMenu = MENU_GROUP:New(group, self:GetText("menu.markTarget", playerKey), groundMenu)
     for i=1,5 do
         local captureIndex = i
-        MENU_GROUP_COMMAND:New(group, "Target " .. i, markMenu, function() self:MenuMarkGroundTarget(unit, captureIndex) end)
+        local targetLabel = string.format(self:GetText("menu.target", playerKey), i)
+        MENU_GROUP_COMMAND:New(group, targetLabel, markMenu, function() self:MenuMarkGroundTarget(unit, captureIndex) end)
     end
     
     -- Illumination submenu with dynamic count display
     local playerName = unit:GetPlayerName() or unit:GetName()
     local flareCount = (self.players[playerName] and self.players[playerName].illuminationFlares) or PILOT_INTUITION_CONFIG.illuminationFlaresDefault
-    local illuMenu = MENU_GROUP:New(group, "Illumination (" .. flareCount .. " left)", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Drop at My Position", illuMenu, function() self:MenuDropIlluminationAtPlayer(unit) end)
-    local illuTargetMenu = MENU_GROUP:New(group, "Drop on Target", illuMenu)
+    local illuLabel = string.format(self:GetText("menu.illumination", playerKey), flareCount)
+    local illuMenu = MENU_GROUP:New(group, illuLabel, playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.dropAtMyPosition", playerKey), illuMenu, function() self:MenuDropIlluminationAtPlayer(unit) end)
+    local illuTargetMenu = MENU_GROUP:New(group, self:GetText("menu.dropOnTarget", playerKey), illuMenu)
     for i=1,5 do
         local captureIndex = i
-        MENU_GROUP_COMMAND:New(group, "Target " .. i, illuTargetMenu, function() self:MenuDropIlluminationOnTarget(unit, captureIndex) end)
+        local targetLabel = string.format(self:GetText("menu.target", playerKey), i)
+        MENU_GROUP_COMMAND:New(group, targetLabel, illuTargetMenu, function() self:MenuDropIlluminationOnTarget(unit, captureIndex) end)
     end
     
     -- Alert frequency submenu
-    local freqMenu = MENU_GROUP:New(group, "Alert Frequency", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Normal", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "normal") end)
-    MENU_GROUP_COMMAND:New(group, "Quiet", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
-    MENU_GROUP_COMMAND:New(group, "Verbose", freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
+    local freqMenu = MENU_GROUP:New(group, self:GetText("menu.alertFrequency", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.normalFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "normal") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.quietFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.verboseFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
     
     -- Summary submenu
-    local summaryMenu = MENU_GROUP:New(group, "Summary", playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, "Brief", summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
-    MENU_GROUP_COMMAND:New(group, "Detailed", summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
+    local summaryMenu = MENU_GROUP:New(group, self:GetText("menu.summary", playerKey), playerSubMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.brief", playerKey), summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.detailed", playerKey), summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
     
     -- Admin Settings submenu (placed last)
-    local adminMenu = MENU_GROUP:New(group, "Settings & Player Guides", playerSubMenu)
+    local adminMenu = MENU_GROUP:New(group, self:GetText("menu.settingsAndGuides", playerKey), playerSubMenu)
     
-    -- Language selection submenu (under admin)
+    -- Language selection submenu (under admin) - Keep multilingual for accessibility
     local langMenu = MENU_GROUP:New(group, "Language / Sprache / Langue", adminMenu)
-    MENU_GROUP_COMMAND:New(group, "English", langMenu, function() self:MenuSetPlayerLanguage(unit, "EN") end)
-    MENU_GROUP_COMMAND:New(group, "Deutsch (German)", langMenu, function() self:MenuSetPlayerLanguage(unit, "DE") end)
-    MENU_GROUP_COMMAND:New(group, "Français (French)", langMenu, function() self:MenuSetPlayerLanguage(unit, "FR") end)
-    MENU_GROUP_COMMAND:New(group, "Español (Spanish)", langMenu, function() self:MenuSetPlayerLanguage(unit, "ES") end)
-    MENU_GROUP_COMMAND:New(group, "Русский (Russian)", langMenu, function() self:MenuSetPlayerLanguage(unit, "RU") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.english", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "EN") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.german", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "DE") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.french", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "FR") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.spanish", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "ES") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.russian", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "RU") end)
     
     -- Distance units submenu (under admin)
-    local distMenu = MENU_GROUP:New(group, "Distance Units", adminMenu)
-    MENU_GROUP_COMMAND:New(group, "Miles (Nautical)", distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "mi") end)
-    MENU_GROUP_COMMAND:New(group, "Kilometers", distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "km") end)
+    local distMenu = MENU_GROUP:New(group, self:GetText("menu.distanceUnits", playerKey), adminMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.milesNautical", playerKey), distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "mi") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.kilometers", playerKey), distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "km") end)
     
     -- Player Guide submenu
-    local guideMenu = MENU_GROUP:New(group, "Player Guide", adminMenu)
-    MENU_GROUP_COMMAND:New(group, "System Overview", guideMenu, function() self:ShowGuideOverview(group) end)
-    MENU_GROUP_COMMAND:New(group, "Detection Ranges", guideMenu, function() self:ShowGuideRanges(group) end)
-    MENU_GROUP_COMMAND:New(group, "Formation Flying", guideMenu, function() self:ShowGuideFormation(group) end)
+    local guideMenu = MENU_GROUP:New(group, self:GetText("menu.playerGuide", playerKey), adminMenu)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.systemOverview", playerKey), guideMenu, function() self:ShowGuideOverview(group) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.detectionRanges", playerKey), guideMenu, function() self:ShowGuideRanges(group) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.formationTips", playerKey), guideMenu, function() self:ShowGuideFormation(group) end)
     MENU_GROUP_COMMAND:New(group, "Environment Effects", guideMenu, function() self:ShowGuideEnvironment(group) end)
     
     -- Log level submenu (global setting)
-    local logMenu = MENU_GROUP:New(group, "Log Level", adminMenu)
+    local logMenu = MENU_GROUP:New(group, self:GetText("menu.logLevel", playerKey), adminMenu)
     MENU_GROUP_COMMAND:New(group, "Error Only", logMenu, function() self:SetLogLevel(1, group) end)
     MENU_GROUP_COMMAND:New(group, "Info (Default)", logMenu, function() self:SetLogLevel(2, group) end)
     MENU_GROUP_COMMAND:New(group, "Debug", logMenu, function() self:SetLogLevel(3, group) end)
@@ -2265,6 +2270,10 @@ function PilotIntuition:MenuSetPlayerLanguage(playerUnit, language)
         end
         
         self.players[playerKey].language = language
+        
+        -- Rebuild the menu immediately to apply language change
+        self:RebuildPlayerMenu(playerUnit)
+        
         local client = playerUnit:GetClient()
         if client then
             local langNames = {
@@ -2274,7 +2283,7 @@ function PilotIntuition:MenuSetPlayerLanguage(playerUnit, language)
                 ES = "Español",
                 RU = "Русский"
             }
-            local msg = string.format("Language set to %s. Menu text will update on respawn/reconnect.", langNames[language] or language)
+            local msg = string.format("Language set to %s. Menu has been updated.", langNames[language] or language)
             MESSAGE:New(msg, 10):ToClient(client)
         end
     end
