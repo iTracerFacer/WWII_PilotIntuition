@@ -52,7 +52,7 @@ local LOG_TRACE = 4
 
 -- Global configuration table for settings
 PILOT_INTUITION_CONFIG = {
-    airDetectionRange = 10000,  -- Meters (base range for air targets) (can be modified by formation and environment)
+    airDetectionRange = 20000,  -- Meters (base range for air targets) (can be modified by formation and environment)
     groundDetectionRange = 5000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
     messageCooldown = 10,  -- Seconds between messages
     markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
@@ -441,7 +441,7 @@ function PilotIntuition:ScanTargets()
                 self.players[clientName] = {
                     trackedAirTargets = {},
                     lastMessageTime = timer.getTime(),
-                    lastFormationMessageTime = 0,  -- Separate cooldown for formation join/leave messages
+                    lastFormationMessageTime = 3,  -- Separate cooldown for formation join/leave messages
                     lastDogfightTime = 0,  -- For multi-bandit tactical picture cooldown
                     wingmenList = {},
                     formationWarned = false,
@@ -1933,7 +1933,6 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     local playerPos = playerUnit:GetCoordinate()
     local playerCoalition = playerUnit:GetCoalition()
     local enemyCoalition = (playerCoalition == coalition.side.BLUE) and coalition.side.RED or coalition.side.BLUE
-    -- enemyAirUnits is provided by ScanTargets; it's an array of units
 
     -- Use cached wingmen count
     local wingmen = playerData.cachedWingmen
@@ -1944,6 +1943,9 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
     end
     local envMult = self:GetDetectionMultiplier()
     local detectionRange = PILOT_INTUITION_CONFIG.airDetectionRange * multiplier * envMult
+
+    PILog(LOG_DEBUG, string.format("PilotIntuition: Scanning %d enemy air units within %.0fm for player %s", 
+        #enemyAirUnits, detectionRange, playerKey))
 
     -- Notify formation changes (suppress during active combat if configured)
     local previousWingmen = playerData.previousWingmen or 0
@@ -2032,38 +2034,56 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
         threateningBandits[i] = nil
     end
     
-    for _, unit in ipairs(enemyAirUnits or {}) do
-        local distance = playerPos:Get2DDistance(unit:GetCoordinate())
-        if distance <= detectionRange then
-            banditCount = banditCount + 1
-            if distance < minDistance then
-                minDistance = distance
-                closestUnit = unit
-            end
-            
-            local targetID = unit:GetName()
-            local now = timer.getTime()
-            
-            -- Calculate bearing from player to bandit
-            local bearing = playerPos:HeadingTo(unit:GetCoordinate())
-            local playerHeading = playerUnit:GetHeading()  -- Already in degrees
-            
-            -- Calculate relative bearing (clock position)
-            local relativeBearing = (bearing - playerHeading + 360) % 360
-            
-            -- Calculate bandit's aspect angle (is he nose-on or tail-on to us?)
-            local banditHeading = unit:GetHeading()  -- Already in degrees
-            local banditToBearing = (bearing + 180) % 360  -- Reverse bearing (from bandit to player)
-            local aspectAngle = math.abs(banditToBearing - banditHeading)
-            if aspectAngle > 180 then aspectAngle = 360 - aspectAngle end  -- Normalize to 0-180
-            
-            -- Debug logging for first contact
-            if distance < 20000 and not playerData.trackedAirTargets[targetID] then
-                PILog(LOG_DEBUG, string.format("PilotIntuition: Initial contact %s - playerHdg:%.0f° bearing:%.0f° relBrg:%.0f° banditHdg:%.0f° aspect:%.0f°", 
-                    targetID, playerHeading, bearing, relativeBearing, banditHeading, aspectAngle))
-            end
-
-            if not playerData.trackedAirTargets[targetID] then
+    for _, unit in ipairs(enemyAirUnits) do
+        PILog(LOG_DEBUG, string.format("PilotIntuition: Checking enemy unit: %s, IsAlive: %s", 
+            unit and unit:GetName() or "nil", tostring(unit and unit:IsAlive())))
+        if unit and unit:IsAlive() then
+            local unitCoord = unit:GetCoordinate()
+            if not unitCoord then
+                PILog(LOG_DEBUG, "PilotIntuition: Could not get coordinate for " .. unit:GetName())
+            else
+                local distance = playerPos:Get2DDistance(unitCoord)
+                PILog(LOG_DEBUG, string.format("PilotIntuition: Unit %s distance: %.0fm (range: %.0fm)", 
+                    unit:GetName(), distance, detectionRange))
+                
+                -- Check if within detection range AND has line of sight
+                if distance <= detectionRange then
+                    -- Use coordinate-based LOS check from player to enemy
+                    local hasLOS = playerPos:IsLOS(unitCoord)
+                    PILog(LOG_DEBUG, string.format("PilotIntuition: Unit %s in range, LOS check: %s", 
+                        unit:GetName(), tostring(hasLOS)))
+                    
+                    if hasLOS then
+                        banditCount = banditCount + 1
+                        PILog(LOG_DEBUG, string.format("PilotIntuition: Enemy detected with LOS: %s at %.0fm", unit:GetName(), distance))
+                        if distance < minDistance then
+                            minDistance = distance
+                            closestUnit = unit
+                        end
+                        
+                        local targetID = unit:GetName()
+                        local now = timer.getTime()
+                        
+                        -- Calculate bearing from player to bandit
+                        local bearing = playerPos:HeadingTo(unitCoord)
+                        local playerHeading = playerUnit:GetHeading()  -- Already in degrees
+                        
+                        -- Calculate relative bearing (clock position)
+                        local relativeBearing = (bearing - playerHeading + 360) % 360
+                        
+                        -- Calculate bandit's aspect angle (is he nose-on or tail-on to us?)
+                        local banditHeading = unit:GetHeading()  -- Already in degrees
+                        local banditToBearing = (bearing + 180) % 360  -- Reverse bearing (from bandit to player)
+                        local aspectAngle = math.abs(banditToBearing - banditHeading)
+                        if aspectAngle > 180 then aspectAngle = 360 - aspectAngle end  -- Normalize to 0-180
+                        
+                        -- Debug logging for first contact
+                        if distance < 20000 and not playerData.trackedAirTargets[targetID] then
+                            PILog(LOG_DEBUG, string.format("PilotIntuition: Initial contact %s - playerHdg:%.0f° bearing:%.0f° relBrg:%.0f° banditHdg:%.0f° aspect:%.0f°", 
+                                targetID, playerHeading, bearing, relativeBearing, banditHeading, aspectAngle))
+                        end
+                        
+                        if not playerData.trackedAirTargets[targetID] then
                 local banditName = unit:GetPlayerName() or unit:GetName()
                 playerData.trackedAirTargets[targetID] = { unit = unit, engaged = false, lastRange = distance, lastTime = now, wasHot = false, lastRelativeBearing = relativeBearing, lastEngagedTime = 0, banditName = banditName }
                 
@@ -2233,8 +2253,14 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 
                 self:ProvideDogfightAssist(playerUnit, unit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing, effectiveCooldown)
             end
-        end
-    end
+                    end  -- End if hasLOS
+                else
+                    PILog(LOG_TRACE, string.format("PilotIntuition: Unit %s out of range: %.0fm > %.0fm", 
+                        unit:GetName(), distance, detectionRange))
+                end  -- End if distance <= detectionRange
+            end  -- End if unitCoord
+        end  -- End if unit and unit:IsAlive()
+    end  -- End for _, unit in ipairs(enemyAirUnits)
 
     -- Report multiple bandits situation with tactical picture
     PILog(LOG_DEBUG, string.format("PilotIntuition: Threatening bandits count: %d", #threateningBandits))
