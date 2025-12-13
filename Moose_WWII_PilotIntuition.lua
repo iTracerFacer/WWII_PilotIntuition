@@ -1372,7 +1372,11 @@ function PilotIntuition:ScanTargets()
                     lastMultipleBanditsWarningTime = 0,  -- Cooldown for "Multiple bandits in vicinity!" message
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,  -- Player's distance unit preference
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,  -- Player's language preference
+                    lastSeenTime = timer.getTime(),  -- Track last time player was seen active
                 }
+            else
+                -- Update last seen time for existing players
+                self.players[clientName].lastSeenTime = timer.getTime()
             end
             
             -- Menu creation now handled by Birth event only
@@ -1543,26 +1547,164 @@ end
 
 function PilotIntuition:DeepCleanup()
     env.info("PilotIntuition: Performing deep cleanup")
-    -- Force remove any stale tracked targets
-    for playerName, playerData in pairs(self.players) do
-        for id, data in pairs(playerData.trackedAirTargets) do
-            if not data.unit or not data.unit:IsAlive() then
-                playerData.trackedAirTargets[id] = nil
+    
+    -- Clean up stale player data for disconnected/dead players
+    local activePlayerNames = {}
+    local activePlayers = self:GetActivePlayers()
+    for clientName, unit in pairs(activePlayers) do
+        if unit and unit:IsAlive() then
+            activePlayerNames[clientName] = true
+            local unitName = unit:GetName()
+            if unitName then
+                activePlayerNames[unitName] = true
             end
-        end
-        for id, _ in pairs(playerData.trackedGroundTargets) do
-            if not self.trackedGroundTargets[id] or not self.trackedGroundTargets[id].group:IsAlive() then
-                playerData.trackedGroundTargets[id] = nil
+            local playerName = unit:GetPlayerName()
+            if playerName then
+                activePlayerNames[playerName] = true
             end
         end
     end
+    
+    -- Remove player data for players who are no longer in the mission
+    local playersToRemove = {}
+    for playerKey, playerData in pairs(self.players) do
+        if not activePlayerNames[playerKey] then
+            -- Check if this player has been inactive for more than 30 seconds
+            local lastSeen = playerData.lastSeenTime or 0
+            if (timer.getTime() - lastSeen) > 30 then
+                table.insert(playersToRemove, playerKey)
+            end
+        else
+            -- Update last seen time for active players
+            playerData.lastSeenTime = timer.getTime()
+        end
+    end
+    
+    for _, playerKey in ipairs(playersToRemove) do
+        env.info("PilotIntuition: Removing stale player data for: " .. playerKey)
+        self.players[playerKey] = nil
+    end
+    
+    -- Clean up menus for groups that no longer exist or have no players
+    local menusToRemove = {}
+    for groupName, menuData in pairs(self.playerMenus) do
+        local group = GROUP:FindByName(groupName)
+        if not group or not group:IsAlive() then
+            table.insert(menusToRemove, groupName)
+        else
+            -- Check if group has any player units
+            local hasPlayers = false
+            local units = group:GetUnits()
+            if units then
+                for _, unit in pairs(units) do
+                    if unit and unit:IsAlive() and unit:GetPlayerName() then
+                        hasPlayers = true
+                        break
+                    end
+                end
+            end
+            if not hasPlayers then
+                table.insert(menusToRemove, groupName)
+            end
+        end
+    end
+    
+    for _, groupName in ipairs(menusToRemove) do
+        env.info("PilotIntuition: Removing stale menu for group: " .. groupName)
+        self.playerMenus[groupName] = nil
+    end
+    
+    -- Force remove any stale tracked targets
+    for playerName, playerData in pairs(self.players) do
+        if playerData.trackedAirTargets then
+            for id, data in pairs(playerData.trackedAirTargets) do
+                if not data.unit or not data.unit:IsAlive() then
+                    playerData.trackedAirTargets[id] = nil
+                end
+            end
+        end
+        if playerData.trackedGroundTargets then
+            for id, _ in pairs(playerData.trackedGroundTargets) do
+                if not self.trackedGroundTargets[id] or not self.trackedGroundTargets[id].group:IsAlive() then
+                    playerData.trackedGroundTargets[id] = nil
+                end
+            end
+        end
+    end
+    
     -- Clean global ground targets
     for id, data in pairs(self.trackedGroundTargets) do
-        if not data.group:IsAlive() then
+        if not data.group or not data.group:IsAlive() then
             self.trackedGroundTargets[id] = nil
         end
     end
+    
     env.info("PilotIntuition: Deep cleanup completed")
+end
+
+-- Cleanup when a player changes slots or disconnects
+function PilotIntuition:CleanupPlayerSlotChange(unit, playerName, groupName)
+    env.info("PilotIntuition: CleanupPlayerSlotChange for player: " .. playerName .. " in group: " .. groupName)
+    
+    -- Check if player is still in ANY unit
+    local activePlayers = self:GetActivePlayers()
+    local playerStillActive = false
+    
+    for clientName, activeUnit in pairs(activePlayers) do
+        if activeUnit then
+            local activeName = activeUnit:GetPlayerName()
+            if activeName == playerName then
+                playerStillActive = true
+                local newGroup = activeUnit:GetGroup()
+                if newGroup then
+                    local newGroupName = newGroup:GetName()
+                    if newGroupName ~= groupName then
+                        env.info("PilotIntuition: Player " .. playerName .. " switched to group: " .. newGroupName)
+                        -- Player switched groups, ensure menu exists for new group
+                        if not self.playerMenus[newGroupName] then
+                            env.info("PilotIntuition: Creating menu for new group: " .. newGroupName)
+                            self.playerMenus[newGroupName] = self:BuildGroupMenus(newGroup)
+                        end
+                    end
+                end
+                break
+            end
+        end
+    end
+    
+    -- If player is not active anywhere, mark them for cleanup
+    if not playerStillActive then
+        env.info("PilotIntuition: Player " .. playerName .. " is no longer active, marking for cleanup")
+        -- Don't remove immediately, mark with timestamp for cleanup in next deep cycle
+        if self.players[playerName] then
+            self.players[playerName].lastSeenTime = timer.getTime() - 25  -- Will be cleaned in 5 seconds
+        end
+    end
+    
+    -- Check if old group still has players
+    local group = GROUP:FindByName(groupName)
+    if group and group:IsAlive() then
+        local hasPlayers = false
+        local units = group:GetUnits()
+        if units then
+            for _, u in pairs(units) do
+                if u and u:IsAlive() and u:GetPlayerName() then
+                    hasPlayers = true
+                    break
+                end
+            end
+        end
+        
+        -- If no players left in group, remove menu
+        if not hasPlayers then
+            env.info("PilotIntuition: No players left in group " .. groupName .. ", removing menu")
+            self.playerMenus[groupName] = nil
+        end
+    else
+        -- Group no longer exists, remove menu
+        env.info("PilotIntuition: Group " .. groupName .. " no longer exists, removing menu")
+        self.playerMenus[groupName] = nil
+    end
 end
 
 -- Setup the mission and per-player menus for pilot intuition toggles
@@ -1611,42 +1753,105 @@ function PilotIntuition:BuildGroupMenus(group)
     local playerSubMenu = MENU_GROUP:New(group, self:GetText("menu.mainTitle", playerKey))
     PILog(LOG_INFO, "PilotIntuition: Main menu created for group: " .. group:GetName())
     
+    -- Helper function to get current player unit from group
+    local function getCurrentPlayerUnit()
+        if not group or not group:IsAlive() then return nil end
+        -- Try to find an alive player unit in the group
+        local units = group:GetUnits()
+        if units then
+            for _, u in pairs(units) do
+                if u and u:IsAlive() and u:GetPlayerName() then
+                    return u
+                end
+            end
+        end
+        return nil
+    end
+    
     -- Dogfight Assist submenu
     local dogfightMenu = MENU_GROUP:New(group, self:GetText("menu.dogfightAssist", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), dogfightMenu, function() self:MenuSetPlayerDogfightAssist(unit, false) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), dogfightMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerDogfightAssist(currentUnit, true) end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), dogfightMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerDogfightAssist(currentUnit, false) end
+    end)
     
     -- Marker Type submenu
     local markerMenu = MENU_GROUP:New(group, self:GetText("menu.markerType", playerKey), playerSubMenu)
     local smokeMenu = MENU_GROUP:New(group, self:GetText("menu.smoke", playerKey), markerMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_red") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_green") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.blue", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_blue") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), smokeMenu, function() self:MenuSetPlayerMarker(unit, "smoke_white") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), smokeMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "smoke_red") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), smokeMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "smoke_green") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.blue", playerKey), smokeMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "smoke_blue") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), smokeMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "smoke_white") end
+    end)
     local flareMenu = MENU_GROUP:New(group, self:GetText("menu.flare", playerKey), markerMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_red") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_green") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), flareMenu, function() self:MenuSetPlayerMarker(unit, "flare_white") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.none", playerKey), markerMenu, function() self:MenuSetPlayerMarker(unit, "none") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.red", playerKey), flareMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "flare_red") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.green", playerKey), flareMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "flare_green") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.white", playerKey), flareMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "flare_white") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.none", playerKey), markerMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerMarker(currentUnit, "none") end
+    end)
     
     -- Air scanning submenu
     local airScanMenu = MENU_GROUP:New(group, self:GetText("menu.airScanning", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), airScanMenu, function() self:MenuSetPlayerAirScanning(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), airScanMenu, function() self:MenuSetPlayerAirScanning(unit, false) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), airScanMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerAirScanning(currentUnit, true) end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), airScanMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerAirScanning(currentUnit, false) end
+    end)
     
     -- Ground scanning submenu
     local groundScanMenu = MENU_GROUP:New(group, self:GetText("menu.groundScanning", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, true) end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), groundScanMenu, function() self:MenuSetPlayerGroundScanning(unit, false) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.enable", playerKey), groundScanMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerGroundScanning(currentUnit, true) end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.disable", playerKey), groundScanMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerGroundScanning(currentUnit, false) end
+    end)
     
     -- Ground targeting submenu
     local groundMenu = MENU_GROUP:New(group, self:GetText("menu.groundTargeting", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.scanForTargets", playerKey), groundMenu, function() self:MenuScanGroundTargets(unit) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.scanForTargets", playerKey), groundMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuScanGroundTargets(currentUnit) end
+    end)
     local markMenu = MENU_GROUP:New(group, self:GetText("menu.markTarget", playerKey), groundMenu)
     for i=1,5 do
         local captureIndex = i
         local targetLabel = string.format(self:GetText("menu.target", playerKey), i)
-        MENU_GROUP_COMMAND:New(group, targetLabel, markMenu, function() self:MenuMarkGroundTarget(unit, captureIndex) end)
+        MENU_GROUP_COMMAND:New(group, targetLabel, markMenu, function() 
+            local currentUnit = getCurrentPlayerUnit()
+            if currentUnit then self:MenuMarkGroundTarget(currentUnit, captureIndex) end
+        end)
     end
     
     -- Illumination submenu with dynamic count display
@@ -1654,40 +1859,82 @@ function PilotIntuition:BuildGroupMenus(group)
     local flareCount = (self.players[playerName] and self.players[playerName].illuminationFlares) or PILOT_INTUITION_CONFIG.illuminationFlaresDefault
     local illuLabel = string.format(self:GetText("menu.illumination", playerKey), flareCount)
     local illuMenu = MENU_GROUP:New(group, illuLabel, playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.dropAtMyPosition", playerKey), illuMenu, function() self:MenuDropIlluminationAtPlayer(unit) end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.dropAtMyPosition", playerKey), illuMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuDropIlluminationAtPlayer(currentUnit) end
+    end)
     local illuTargetMenu = MENU_GROUP:New(group, self:GetText("menu.dropOnTarget", playerKey), illuMenu)
     for i=1,5 do
         local captureIndex = i
         local targetLabel = string.format(self:GetText("menu.target", playerKey), i)
-        MENU_GROUP_COMMAND:New(group, targetLabel, illuTargetMenu, function() self:MenuDropIlluminationOnTarget(unit, captureIndex) end)
+        MENU_GROUP_COMMAND:New(group, targetLabel, illuTargetMenu, function() 
+            local currentUnit = getCurrentPlayerUnit()
+            if currentUnit then self:MenuDropIlluminationOnTarget(currentUnit, captureIndex) end
+        end)
     end
     
     -- Alert frequency submenu
     local freqMenu = MENU_GROUP:New(group, self:GetText("menu.alertFrequency", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.normalFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "normal") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.quietFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "quiet") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.verboseFreq", playerKey), freqMenu, function() self:MenuSetPlayerAlertFrequency(unit, "verbose") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.normalFreq", playerKey), freqMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerAlertFrequency(currentUnit, "normal") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.quietFreq", playerKey), freqMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerAlertFrequency(currentUnit, "quiet") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.verboseFreq", playerKey), freqMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerAlertFrequency(currentUnit, "verbose") end
+    end)
     
     -- Summary submenu
     local summaryMenu = MENU_GROUP:New(group, self:GetText("menu.summary", playerKey), playerSubMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.brief", playerKey), summaryMenu, function() self:MenuSendPlayerSummary(unit, "brief") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.detailed", playerKey), summaryMenu, function() self:MenuSendPlayerSummary(unit, "detailed") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.brief", playerKey), summaryMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSendPlayerSummary(currentUnit, "brief") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.detailed", playerKey), summaryMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSendPlayerSummary(currentUnit, "detailed") end
+    end)
     
     -- Admin Settings submenu (placed last)
     local adminMenu = MENU_GROUP:New(group, self:GetText("menu.settingsAndGuides", playerKey), playerSubMenu)
     
     -- Language selection submenu (under admin) - Keep multilingual for accessibility
     local langMenu = MENU_GROUP:New(group, "Language / Sprache / Langue", adminMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.english", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "EN") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.german", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "DE") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.french", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "FR") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.spanish", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "ES") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.russian", playerKey), langMenu, function() self:MenuSetPlayerLanguage(unit, "RU") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.english", playerKey), langMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerLanguage(currentUnit, "EN") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.german", playerKey), langMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerLanguage(currentUnit, "DE") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.french", playerKey), langMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerLanguage(currentUnit, "FR") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.spanish", playerKey), langMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerLanguage(currentUnit, "ES") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.russian", playerKey), langMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerLanguage(currentUnit, "RU") end
+    end)
     
     -- Distance units submenu (under admin)
     local distMenu = MENU_GROUP:New(group, self:GetText("menu.distanceUnits", playerKey), adminMenu)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.milesNautical", playerKey), distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "mi") end)
-    MENU_GROUP_COMMAND:New(group, self:GetText("menu.kilometers", playerKey), distMenu, function() self:MenuSetPlayerDistanceUnit(unit, "km") end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.milesNautical", playerKey), distMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerDistanceUnit(currentUnit, "mi") end
+    end)
+    MENU_GROUP_COMMAND:New(group, self:GetText("menu.kilometers", playerKey), distMenu, function() 
+        local currentUnit = getCurrentPlayerUnit()
+        if currentUnit then self:MenuSetPlayerDistanceUnit(currentUnit, "km") end
+    end)
     
     -- Player Guide submenu
     local guideMenu = MENU_GROUP:New(group, self:GetText("menu.playerGuide", playerKey), adminMenu)
@@ -1851,6 +2098,10 @@ function PilotIntuition:WireEventHandlers()
     local handler = EVENTHANDLER:New()
     handler:HandleEvent(EVENTS.Birth)
     handler:HandleEvent(EVENTS.PlayerEnterUnit)
+    handler:HandleEvent(EVENTS.PlayerLeaveUnit)
+    handler:HandleEvent(EVENTS.Ejection)
+    handler:HandleEvent(EVENTS.Crash)
+    handler:HandleEvent(EVENTS.Dead)
     handler:HandleEvent(EVENTS.Shot)
     handler:HandleEvent(EVENTS.Land)
     
@@ -1942,6 +2193,60 @@ function PilotIntuition:WireEventHandlers()
         end
     end
     
+    function handler:OnEventPlayerLeaveUnit(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        
+        -- Get player name before they leave
+        local playerName = unit:GetPlayerName()
+        if not playerName then return end
+        
+        local group = unit:GetGroup()
+        if not group then return end
+        local groupName = group:GetName()
+        
+        PILog(LOG_INFO, "PilotIntuition: PlayerLeaveUnit event for player: " .. playerName .. " in group: " .. groupName)
+        
+        -- Schedule cleanup after a short delay to allow for slot changes
+        SCHEDULER:New(nil, function()
+            selfref:CleanupPlayerSlotChange(unit, playerName, groupName)
+        end, {}, 2)
+    end
+    
+    function handler:OnEventEjection(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        
+        local playerName = unit:GetPlayerName()
+        if not playerName then return end
+        
+        PILog(LOG_INFO, "PilotIntuition: Player ejected: " .. playerName)
+        -- Keep player data but mark as not in aircraft
+        -- Will be cleaned up if they don't return to aircraft
+    end
+    
+    function handler:OnEventCrash(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        
+        local playerName = unit:GetPlayerName()
+        if not playerName then return end
+        
+        PILog(LOG_INFO, "PilotIntuition: Player crashed: " .. playerName)
+        -- Keep player data temporarily in case they respawn
+    end
+    
+    function handler:OnEventDead(EventData)
+        if not EventData or not EventData.IniUnit then return end
+        local unit = EventData.IniUnit
+        
+        local playerName = unit:GetPlayerName()
+        if not playerName then return end
+        
+        PILog(LOG_INFO, "PilotIntuition: Player unit died: " .. playerName)
+        -- Keep player data temporarily in case they respawn
+    end
+    
     self.EventHandler = handler
     PILog(LOG_INFO, "PilotIntuition: Event handlers wired successfully")
 end
@@ -2007,7 +2312,11 @@ function PilotIntuition:SetupPlayerMenus()
                     threateningBandits = {},  -- Reusable table for detected threats
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,
+                    lastSeenTime = timer.getTime(),  -- Track last time player was seen active
                 }
+            else
+                -- Update last seen time for existing players
+                self.players[clientName].lastSeenTime = timer.getTime()
             end
             
             -- Create alias for actual player name
@@ -2098,11 +2407,21 @@ function PilotIntuition:MenuSetPlayerMarker(playerUnit, markerType)
         env.info("PilotIntuition: playerUnit:GetPlayerName() = " .. tostring(playerUnit:GetPlayerName()))
     end
     env.info("PilotIntuition: markerType = " .. tostring(markerType))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     -- store as player pref only - not global config
     if playerKey and self.players[playerKey] then
         self.players[playerKey].markerType = markerType
@@ -2137,6 +2456,14 @@ function PilotIntuition:MenuSetPlayerDogfightAssist(playerUnit, onoff)
     env.info("PilotIntuition: Looking for player data with key: " .. tostring(playerKey))
     env.info("PilotIntuition: Available players: " .. table.concat(self:GetPlayerKeys(), ", "))
     
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         env.info("PilotIntuition: Found player data, setting dogfightAssist to " .. tostring(onoff))
         self.players[playerKey].dogfightAssist = onoff
@@ -2161,11 +2488,21 @@ function PilotIntuition:MenuSetPlayerAirScanning(playerUnit, onoff)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: onoff = " .. tostring(onoff))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         self.players[playerKey].enableAirScanning = onoff
         local status = onoff and "enabled" or "disabled"
@@ -2183,11 +2520,21 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: onoff = " .. tostring(onoff))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         self.players[playerKey].enableGroundScanning = onoff
         local status = onoff and "enabled" or "disabled"
@@ -2205,11 +2552,21 @@ function PilotIntuition:MenuSetPlayerAlertFrequency(playerUnit, mode)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: mode = " .. tostring(mode))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         local multiplier
         if mode == "normal" then
@@ -2236,11 +2593,21 @@ function PilotIntuition:MenuSetPlayerDistanceUnit(playerUnit, unit)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: unit = " .. tostring(unit))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         self.players[playerKey].distanceUnit = unit
         local client = playerUnit:GetClient()
@@ -2258,11 +2625,21 @@ function PilotIntuition:MenuSetPlayerLanguage(playerUnit, language)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: language = " .. tostring(language))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     if playerKey and self.players[playerKey] then
         -- Validate language
         if not PILOT_INTUITION_LANGUAGES[language] then
@@ -2308,6 +2685,16 @@ function PilotIntuition:MenuScanGroundTargets(playerUnit)
     end
     
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: playerKey = " .. tostring(playerKey))
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     local playerData = playerKey and self.players[playerKey]
     if not playerData then 
         env.info("PilotIntuition: ERROR - No player data found for " .. tostring(playerKey))
@@ -2384,11 +2771,22 @@ function PilotIntuition:MenuMarkGroundTarget(playerUnit, index)
         env.info("PilotIntuition: playerUnit:GetName() = " .. tostring(playerUnit:GetName()))
     end
     env.info("PilotIntuition: index = " .. tostring(index))
-    if not playerUnit then 
-        env.info("PilotIntuition: ERROR - No playerUnit provided")
+    if not playerUnit or not playerUnit:IsAlive() then 
+        env.info("PilotIntuition: ERROR - No playerUnit provided or unit not alive")
         return 
     end
+    
     local playerKey = self:GetPlayerDataKey(playerUnit)
+    env.info("PilotIntuition: playerKey = " .. tostring(playerKey))
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
+    
     local playerData = playerKey and self.players[playerKey]
     if not playerData then 
         env.info("PilotIntuition: ERROR - No player data found for " .. tostring(playerKey))
@@ -2425,6 +2823,14 @@ function PilotIntuition:MenuDropIlluminationAtPlayer(playerUnit)
     
     local playerKey = self:GetPlayerDataKey(playerUnit)
     env.info("PilotIntuition: playerKey = " .. tostring(playerKey))
+    
+    -- If no player data found, try to initialize it
+    if not playerKey or not self.players[playerKey] then
+        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+        env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
+        self:InitializePlayer(playerUnit, playerName)
+        playerKey = self:GetPlayerDataKey(playerUnit)
+    end
     
     if not playerKey or not self.players[playerKey] then
         env.info("PilotIntuition: ERROR - Player data not found for: " .. tostring(playerKey))
@@ -2880,6 +3286,13 @@ end
 function PilotIntuition:StartScheduler()
     -- Schedule periodic scans
     SCHEDULER:New(nil, self.ScanTargets, {self}, 1, PILOT_INTUITION_CONFIG.scanInterval)
+    
+    -- Schedule periodic deep cleanup (every 60 seconds)
+    SCHEDULER:New(nil, function()
+        self:DeepCleanup()
+    end, {}, 60, 60)
+    
+    env.info("PilotIntuition: Schedulers started - scanning every " .. PILOT_INTUITION_CONFIG.scanInterval .. "s, cleanup every 60s")
 end
 
 -- (old ScanTargets removed; using the optimized ScanTargets above)
