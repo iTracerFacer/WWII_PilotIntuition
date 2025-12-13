@@ -1330,7 +1330,7 @@ function PilotIntuition:ScanTargets()
     
     -- Build active client list from the players we found
     for clientName, unit in pairs(activePlayers) do
-        if unit and unit:IsAlive() then
+        if unit and unit:IsAlive() and unit:IsAir() then
             local client = unit:GetClient()
             local pos = unit:GetCoordinate()
             local actualPlayerName = unit:GetPlayerName() or unit:GetName()
