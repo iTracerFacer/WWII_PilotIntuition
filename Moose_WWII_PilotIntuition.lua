@@ -3870,7 +3870,7 @@ function PilotIntuition:CheckCloseFlyingForPlayer(playerUnit, playerData, client
                             playerData.lastHeadOnWarningTime = now
                         end
                     elseif not isHeadOn then
-                        if now - playerData.lastComplimentTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
+                        if playerUnit:InAir() and now - playerData.lastComplimentTime >= (PILOT_INTUITION_CONFIG.closeFlyingMessageCooldown * playerData.frequencyMultiplier) then
                             MESSAGE:New(self:GetRandomMessage("closeFlyingCompliment"), 10):ToClient(client)
                             playerData.lastComplimentTime = now
                         end
