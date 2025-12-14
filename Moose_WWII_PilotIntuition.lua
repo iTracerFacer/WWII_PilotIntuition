@@ -229,6 +229,18 @@ PILOT_INTUITION_LANGUAGES = {
             "Ground scanning %s.",
             "Ground detection %s.",
         },
+        groundScanningDisabledDogfight = {
+            "Ground scanning disabled - engaged in dogfight.",
+            "Ground detection off - fighting bandits.",
+        },
+        groundScanningDisabledMarked = {
+            "Ground scanning disabled - ground target marked.",
+            "Ground detection off - target marked.",
+        },
+        groundScanningDisabledTime = {
+            "Ground scanning disabled - mission time exceeded.",
+            "Ground detection off - time limit reached.",
+        },
         alertFrequencyToggle = {
             "Alert frequency set to %s.",
             "Alerts now %s.",
@@ -427,6 +439,18 @@ PILOT_INTUITION_LANGUAGES = {
             "Bodenscan %s.",
             "Bodenerkennung %s.",
         },
+        groundScanningDisabledDogfight = {
+            "Bodenscan deaktiviert - im Luftkampf engagiert.",
+            "Bodenerkennung aus - Banditen bekämpfen.",
+        },
+        groundScanningDisabledMarked = {
+            "Bodenscan deaktiviert - Bodenziele markiert.",
+            "Bodenerkennung aus - Ziel markiert.",
+        },
+        groundScanningDisabledTime = {
+            "Bodenscan deaktiviert - Missionszeit überschritten.",
+            "Bodenerkennung aus - Zeitlimit erreicht.",
+        },
         alertFrequencyToggle = {
             "Warnfrequenz auf %s eingestellt.",
             "Warnungen jetzt %s.",
@@ -621,6 +645,18 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Scan au sol %s.",
             "Détection au sol %s.",
+        },
+        groundScanningDisabledDogfight = {
+            "Scan au sol désactivé - engagé dans un combat aérien.",
+            "Détection au sol désactivée - combat contre des bandits.",
+        },
+        groundScanningDisabledMarked = {
+            "Scan au sol désactivé - cible terrestre marquée.",
+            "Détection au sol désactivée - cible marquée.",
+        },
+        groundScanningDisabledTime = {
+            "Scan au sol désactivé - temps de mission dépassé.",
+            "Détection au sol désactivée - limite de temps atteinte.",
         },
         alertFrequencyToggle = {
             "Fréquence d'alerte définie sur %s.",
@@ -817,6 +853,18 @@ PILOT_INTUITION_LANGUAGES = {
             "Escaneo terrestre %s.",
             "Detección terrestre %s.",
         },
+        groundScanningDisabledDogfight = {
+            "Escaneo terrestre desactivado - comprometido en combate aéreo.",
+            "Detección terrestre apagada - luchando contra bandidos.",
+        },
+        groundScanningDisabledMarked = {
+            "Escaneo terrestre desactivado - objetivo terrestre marcado.",
+            "Detección terrestre apagada - objetivo marcado.",
+        },
+        groundScanningDisabledTime = {
+            "Escaneo terrestre desactivado - tiempo de misión excedido.",
+            "Detección terrestre apagada - límite de tiempo alcanzado.",
+        },
         alertFrequencyToggle = {
             "Frecuencia de alerta establecida en %s.",
             "Alertas ahora %s.",
@@ -1011,6 +1059,18 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Наземное сканирование %s.",
             "Наземное обнаружение %s.",
+        },
+        groundScanningDisabledDogfight = {
+            "Наземное сканирование отключено - участвует в воздушном бою.",
+            "Наземное обнаружение выключено - сражается с бандитами.",
+        },
+        groundScanningDisabledMarked = {
+            "Наземное сканирование отключено - наземная цель отмечена.",
+            "Наземное обнаружение выключено - цель отмечена.",
+        },
+        groundScanningDisabledTime = {
+            "Наземное сканирование отключено - время миссии превышено.",
+            "Наземное обнаружение выключено - лимит времени достигнут.",
         },
         alertFrequencyToggle = {
             "Частота оповещений установлена на %s.",
@@ -1227,6 +1287,18 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Skanowanie naziemne %s.",
             "Wykrywanie naziemne %s.",
+        },
+        groundScanningDisabledDogfight = {
+            "Skanowanie naziemne wyłączone - zaangażowany w walkę powietrzną.",
+            "Wykrywanie naziemne wyłączone - walczy z bandytami.",
+        },
+        groundScanningDisabledMarked = {
+            "Skanowanie naziemne wyłączone - cel naziemny zaznaczony.",
+            "Wykrywanie naziemne wyłączone - cel zaznaczony.",
+        },
+        groundScanningDisabledTime = {
+            "Skanowanie naziemne wyłączone - czas misji przekroczony.",
+            "Wykrywanie naziemne wyłączone - limit czasu osiągnięty.",
         },
         alertFrequencyToggle = {
             "Częstotliwość alertów ustawiona na %s.",
@@ -1447,6 +1519,18 @@ PILOT_INTUITION_LANGUAGES = {
             "Varredura terrestre %s.",
             "Detecção terrestre %s.",
         },
+        groundScanningDisabledDogfight = {
+            "Varredura terrestre desativada - engajado em combate aéreo.",
+            "Detecção terrestre desligada - lutando contra bandidos.",
+        },
+        groundScanningDisabledMarked = {
+            "Varredura terrestre desativada - alvo terrestre marcado.",
+            "Detecção terrestre desligada - alvo marcado.",
+        },
+        groundScanningDisabledTime = {
+            "Varredura terrestre desativada - tempo de missão excedido.",
+            "Detecção terrestre desligada - limite de tempo alcançado.",
+        },
         alertFrequencyToggle = {
             "Frequência de alertas definida para %s.",
             "Alertas agora %s.",
@@ -1665,6 +1749,18 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "地面扫描 %s。",
             "地面检测 %s。",
+        },
+        groundScanningDisabledDogfight = {
+            "地面扫描已禁用 - 参与空战。",
+            "地面检测关闭 - 与强盗作战。",
+        },
+        groundScanningDisabledMarked = {
+            "地面扫描已禁用 - 地面目标已标记。",
+            "地面检测关闭 - 目标已标记。",
+        },
+        groundScanningDisabledTime = {
+            "地面扫描已禁用 - 任务时间已超过。",
+            "地面检测关闭 - 已达到时间限制。",
         },
         alertFrequencyToggle = {
             "警报频率设置为 %s。",
@@ -1885,6 +1981,18 @@ PILOT_INTUITION_LANGUAGES = {
             "地上スキャン%s。",
             "地上検知%s。",
         },
+        groundScanningDisabledDogfight = {
+            "地上スキャン無効 - 空中戦に参加中。",
+            "地上検知オフ - 強盗と戦闘中。",
+        },
+        groundScanningDisabledMarked = {
+            "地上スキャン無効 - 地上目標がマーク済み。",
+            "地上検知オフ - 目標がマーク済み。",
+        },
+        groundScanningDisabledTime = {
+            "地上スキャン無効 - ミッション時間が超過。",
+            "地上検知オフ - 時間制限に達した。",
+        },
         alertFrequencyToggle = {
             "アラート頻度を%sに設定。",
             "アラートが今%s。",
@@ -2102,6 +2210,18 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Pozemní skenování %s.",
             "Pozemní detekce %s.",
+        },
+        groundScanningDisabledDogfight = {
+            "Pozemní skenování zakázáno - zapojen do vzdušného boje.",
+            "Pozemní detekce vypnuta - bojuje s bandity.",
+        },
+        groundScanningDisabledMarked = {
+            "Pozemní skenování zakázáno - pozemní cíl označen.",
+            "Pozemní detekce vypnuta - cíl označen.",
+        },
+        groundScanningDisabledTime = {
+            "Pozemní skenování zakázáno - čas mise překročen.",
+            "Pozemní detekce vypnuta - dosažen limit času.",
         },
         alertFrequencyToggle = {
             "Frekvence upozornění nastavena na %s.",
@@ -2496,6 +2616,7 @@ function PilotIntuition:ScanTargets()
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,  -- Player's language preference
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
                     lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
+                    lastGroundScanningDisabledReason = nil,  -- Track last reason ground scanning was disabled
                 }
             else
                 -- Update last seen time for existing players
@@ -2643,8 +2764,19 @@ function PilotIntuition:ScanTargets()
             if playerData.enableAirScanning then
                 self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
             end
-            if playerData.enableGroundScanning and self:ShouldScanGroundTargets(playerData) then
+            local shouldScanGround = self:ShouldScanGroundTargets(playerData)
+            if playerData.enableGroundScanning and shouldScanGround == true then
                 self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
+            elseif type(shouldScanGround) == "string" then
+                -- Ground scanning is disabled for a reason, notify if reason changed
+                if playerData.lastGroundScanningDisabledReason ~= shouldScanGround then
+                    local messageKey = "groundScanningDisabled" .. shouldScanGround:gsub("^%l", string.upper)
+                    MESSAGE:New(self:GetRandomMessage(messageKey, nil, playerName), 10):ToClient(client)
+                    playerData.lastGroundScanningDisabledReason = shouldScanGround
+                end
+            else
+                -- Reset reason if scanning is enabled again
+                playerData.lastGroundScanningDisabledReason = nil
             end
             self:CheckCloseFlyingForPlayer(unit, playerData, client, activeClients)
         end
@@ -3457,6 +3589,7 @@ function PilotIntuition:SetupPlayerMenus()
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
                     lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
+                    lastGroundScanningDisabledReason = nil,  -- Track last reason ground scanning was disabled
                 }
             else
                 -- Update last seen time for existing players
@@ -5128,7 +5261,7 @@ function PilotIntuition:ShouldScanGroundTargets(playerData)
     if PILOT_INTUITION_CONFIG.disableGroundScanningInDogfight then
         for _, targetData in pairs(playerData.trackedAirTargets) do
             if targetData.engaged then
-                return false
+                return "dogfight"
             end
         end
     end
@@ -5136,14 +5269,14 @@ function PilotIntuition:ShouldScanGroundTargets(playerData)
     -- Check if recently marked a ground target
     if PILOT_INTUITION_CONFIG.disableGroundScanningAfterMarking then
         if playerData.lastGroundTargetMarkedTime > 0 then
-            return false
+            return "marked"
         end
     end
     
     -- Check mission time
     if PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime > 0 then
         if now > PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime then
-            return false
+            return "time"
         end
     end
     
