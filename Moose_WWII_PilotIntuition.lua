@@ -54,14 +54,47 @@ local LOG_TRACE = 4
 
 -- Global configuration table for settings
 PILOT_INTUITION_CONFIG = {
+    -- ========================================
+    -- DETECTION AND SCANNING SETTINGS
+    -- ========================================
+    scanInterval = 3,  -- This is how often (in seconds) the system scans for targets. Lower values increase responsiveness but may impact performance!
     airDetectionRange = 8000,  -- Meters (base range for air targets) (can be modified by formation and environment)
     groundDetectionRange = 5000,  -- Meters (base range for ground targets) (can be modified by formation and environment)
-    messageCooldown = 10,  -- Seconds between messages
-    markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
-    markerDuration = 300,  -- Seconds for marker visibility (dcs default can't be changed, so this is just for reference)
+    maxMultiplier = 8,  -- Max detection multiplier to prevent excessive ranges
+    enableAirScanning = true,  -- Enable scanning for air targets, on by default, can be disabled via menus.
+    enableGroundScanning = false,  -- Enable scanning for ground targets, off by default to reduce message spam, players can enable via menu.
+
+    -- ========================================
+    -- ENVIRONMENTAL MULTIPLIERS
+    -- ========================================
+    nightDetectionMultiplier = 0.5,  -- Detection range multiplier at night
+    badWeatherMultiplier = 0.7,  -- Detection range multiplier in bad weather (not implemented yet)
+
+    -- ========================================
+    -- FORMATION SETTINGS
+    -- ========================================
+    formationRange = 1000,  -- Meters for considering players in formation
+    minFormationWingmen = 1,  -- Minimum wingmen for formation integrity warnings
+    formationMessageCooldown = 60,  -- Seconds cooldown for formation join/leave messages (prevents spam)
+    countAIWingmen = true,  -- Count AI units in same group as wingmen for formation bonus (false = players only count as wingmen)
+    aiWingmenMultiplier = 1.0,  -- Multiplier for AI wingmen (0.5 = half credit, 1.0 = full credit)
+    suppressFormationInCombat = true,  -- Suppress formation join/leave messages when engaged with bandits
+
+    -- ========================================
+    -- CLOSE FLYING AND COMPLIMENTS SETTINGS
+    -- ========================================
+    enableCloseFlyingCompliments = true,  -- Enable compliments for close flying
+    complimentRange = 75,  -- Meters for close flying compliment
+    headOnWarningRange = 150,  -- Meters for head-on warning
+    closeFlyingMessageCooldown = 60,  -- Seconds between close flying messages
+
+    -- ========================================
+    -- DOGFIGHT AND COMBAT SETTINGS
+    -- ========================================
+    dogfightAssistEnabled = true,  -- Enable dogfight assistance by default
+    dogfightMessageCooldown = 3,  -- Seconds between dogfight assist messages
     threatHotRange = 1000,  -- Meters for "hot" threat
     threatColdRange = 5000,  -- Meters for "cold" threat
-    scanInterval = 5,  -- Seconds between scans
     mergeRange = 500,  -- Meters for merge detection
     highMergeAltitude = 500,  -- Meters altitude difference for "high merge"
     lowMergeAltitude = 500,  -- Meters altitude difference for "low merge"
@@ -74,45 +107,54 @@ PILOT_INTUITION_CONFIG = {
     maxThreatDisplay = 3,  -- Maximum number of threats to display in multi-bandit tactical picture (most threatening first)
     combatIntensityThreshold = 3,  -- Number of bandits to trigger "high intensity" mode (increases cooldowns)
     combatIntensityCooldownMultiplier = 1.5,  -- Multiply dogfight assist cooldown by this during high intensity combat
-    suppressFormationInCombat = true,  -- Suppress formation join/leave messages when engaged with bandits
-    formationRange = 1000,  -- Meters for considering players in formation
-    minFormationWingmen = 1,  -- Minimum wingmen for formation integrity warnings
-    formationMessageCooldown = 60,  -- Seconds cooldown for formation join/leave messages (prevents spam)
-    nightDetectionMultiplier = 0.5,  -- Detection range multiplier at night
-    badWeatherMultiplier = 0.7,  -- Detection range multiplier in bad weather
-    dogfightAssistEnabled = true,  -- Enable dogfight assistance by default
-    dogfightMessageCooldown = 3,  -- Seconds between dogfight assist messages
     criticalSpeedThreshold = 150,  -- Knots - warn if speed drops below this in dogfight
     altitudeDeltaThreshold = 300,  -- Meters - significant altitude difference for callouts
     highClosureRate = 100,  -- M/s - warn if closure rate exceeds this
     positionChangeThreshold = 45,  -- Degrees - trigger update if bandit moves this much
-    maxMultiplier = 8,  -- Max detection multiplier to prevent excessive ranges
-    summaryInterval = 120,  -- Seconds between scheduled summaries (0 to disable)
-    summaryCooldown = 2,  -- Minimum seconds between on-demand summaries
-    activeMessaging = true,  -- Enable live alerts; false for on-demand only
-    showGlobalMenu = true,  -- Enable global settings menu for players
-    showWelcomeMessage = true,  -- Show welcome message to new players
-    enableCloseFlyingCompliments = true,  -- Enable compliments for close flying
-    complimentRange = 75,  -- Meters for close flying compliment
-    headOnWarningRange = 150,  -- Meters for head-on warning
-    closeFlyingMessageCooldown = 26,  -- Seconds between close flying messages
-    enableAirScanning = true,  -- Enable scanning for air targets
-    enableGroundScanning = false,  -- Enable scanning for ground targets (off by default to reduce message spam)
+
+    -- ========================================
+    -- BEHAVIOR HINTS SETTINGS
+    -- ========================================
+    enableBehaviorHints = true,  -- Enable delta-based behavior hints
+    velocityDeltaThreshold = 20,  -- m/s change for accelerating/decelerating hints
+    behaviorAltitudeDeltaThreshold = 100,  -- Meters change for climbing/descending hints
+    headingDeltaThreshold = 45,  -- Degrees change for turning hints
+    behaviorHintCooldown = 10,  -- Seconds between behavior hint messages
+
+    -- ========================================
+    -- MARKER AND VISUAL SETTINGS
+    -- ========================================
+    markerType = "smoke_red",  -- Options: "smoke_red", "smoke_green", "smoke_blue", "smoke_white", "flare_red", "flare_green", "flare_white", "none"
+    markerDuration = 300,  -- Seconds for marker visibility (dcs default can't be changed, so this is just for reference)
+
+    -- ========================================
+    -- GROUND TARGETING AND ILLUMINATION SETTINGS
+    -- ========================================
     disableGroundScanningInDogfight = true,  -- Disable ground scanning when engaged in dogfight with bandits
     disableGroundScanningAfterMarking = true,  -- Disable ground scanning permanently after marking a ground target (requires manual re-enable)
     groundScanningDisableAfterMissionTime = 180,  -- Seconds after enabling ground scanning to disable it (0 = never disable)
     illuminationCooldown = 30,  -- Seconds between illumination flare drops (simulates reload time)
     illuminationAltitude = 500,  -- Meters - altitude offset above target for illumination flares
     illuminationFlaresDefault = 3,  -- Number of illumination flares per sortie
-    countAIWingmen = true,  -- Count AI units in same group as wingmen for formation bonus (false = players only count as wingmen)
-    aiWingmenMultiplier = 1.0,  -- Multiplier for AI wingmen (0.5 = half credit, 1.0 = full credit)
+
+    -- ========================================
+    -- MESSAGING AND UI SETTINGS
+    -- ========================================
+    messageCooldown = 10,  -- Seconds between messages
+    activeMessaging = true,  -- Enable live alerts; false for on-demand only
+    showGlobalMenu = true,  -- Enable global settings menu for players
+    showWelcomeMessage = true,  -- Show welcome message to new players
+    summaryInterval = 120,  -- Seconds between scheduled summaries (0 to disable)
+    summaryCooldown = 2,  -- Minimum seconds between on-demand summaries
     distanceUnit = "mi",  -- Default distance unit: "km" for kilometers, "mi" for miles (nautical miles)
     defaultLanguage = "EN",  -- Default language: "EN", "DE", "FR", "ES", "RU", "PL", "PT", "CN", "JP", "CZ"
+
 }
 
 -- Multilingual message and menu tables
 -- Each language contains all messages and menu text
 PILOT_INTUITION_LANGUAGES = {
+    -- English language
     EN = {
         -- Messages
         welcome = {
@@ -278,6 +320,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "No enemy ground targets detected in range.",
         selectTargetFromMenu = "Select a target from the menu to mark it.",
         targetInfo = "Target %d: %s %s %s, Bearing %.0f, Range %.1f %s",
+        -- Behavior hints
+        accelerating = "accelerating",
+        decelerating = "decelerating",
+        climbing = "climbing",
+        descending = "descending",
+        turning_left = "turning left",
+        turning_right = "turning right",
+        reversing = "reversing",
         -- State words
         enabled = "enabled",
         disabled = "disabled",
@@ -493,6 +543,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Keine feindlichen Bodenziele in Reichweite erkannt.",
         selectTargetFromMenu = "Wählen Sie ein Ziel aus dem Menü zum Markieren.",
         targetInfo = "Ziel %d: %s %s %s, Peilung %.0f, Reichweite %.1f %s",
+        -- Behavior hints
+        accelerating = "beschleunigend",
+        decelerating = "verzögernd",
+        climbing = "steigend",
+        descending = "sinkend",
+        turning_left = "links drehend",
+        turning_right = "rechts drehend",
+        reversing = "umkehrend",
         enabled = "aktiviert",
         disabled = "deaktiviert",
         hot = "heiß",
@@ -706,6 +764,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Aucune cible terrestre ennemie détectée à portée.",
         selectTargetFromMenu = "Sélectionnez une cible dans le menu pour la marquer.",
         targetInfo = "Cible %d: %s %s %s, Relèvement %.0f, Portée %.1f %s",
+        -- Behavior hints
+        accelerating = "accélérant",
+        decelerating = "décélérant",
+        climbing = "montant",
+        descending = "descendant",
+        turning_left = "tournant à gauche",
+        turning_right = "tournant à droite",
+        reversing = "inversant",
         enabled = "activé",
         disabled = "désactivé",
         hot = "chaud",
@@ -919,6 +985,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "No se detectaron objetivos terrestres enemigos en rango.",
         selectTargetFromMenu = "Selecciona un objetivo del menú para marcarlo.",
         targetInfo = "Objetivo %d: %s %s %s, Rumbo %.0f, Rango %.1f %s",
+        -- Behavior hints
+        accelerating = "acelerando",
+        decelerating = "desacelerando",
+        climbing = "ascendiendo",
+        descending = "descendiendo",
+        turning_left = "girando a la izquierda",
+        turning_right = "girando a la derecha",
+        reversing = "revirtiendo",
         enabled = "activado",
         disabled = "desactivado",
         hot = "caliente",
@@ -1132,6 +1206,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Вражеские наземные цели в радиусе не обнаружены.",
         selectTargetFromMenu = "Выберите цель из меню, чтобы отметить её.",
         targetInfo = "Цель %d: %s %s %s, Пеленг %.0f, Дальность %.1f %s",
+        -- Behavior hints
+        accelerating = "ускоряясь",
+        decelerating = "замедляясь",
+        climbing = "набирая высоту",
+        descending = "снижаясь",
+        turning_left = "поворачивая налево",
+        turning_right = "поворачивая направо",
+        reversing = "разворачиваясь",
         enabled = "включено",
         disabled = "отключено",
         hot = "горячий",
@@ -1367,6 +1449,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Brak wykrytych wrogich celów naziemnych w zasięgu.",
         selectTargetFromMenu = "Wybierz cel z menu, aby go oznaczyć.",
         targetInfo = "Cel %d: %s %s %s, Kurs %.0f, Zasięg %.1f %s",
+        -- Behavior hints
+        accelerating = "przyspieszający",
+        decelerating = "zwalniający",
+        climbing = "wznoszący się",
+        descending = "opadający",
+        turning_left = "skręca w lewo",
+        turning_right = "skręca w prawo",
+        reversing = "odwracający",
         -- State words
         enabled = "włączony",
         disabled = "wyłączony",
@@ -1604,6 +1694,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Nenhum alvo terrestre inimigo detectado no alcance.",
         selectTargetFromMenu = "Selecione um alvo do menu para marcá-lo.",
         targetInfo = "Alvo %d: %s %s %s, Rumo %.0f, Alcance %.1f %s",
+        -- Behavior hints
+        accelerating = "acelerando",
+        decelerating = "desacelerando",
+        climbing = "subindo",
+        descending = "descendo",
+        turning_left = "virando à esquerda",
+        turning_right = "virando à direita",
+        reversing = "revertendo",
         -- State words
         enabled = "ativado",
         disabled = "desativado",
@@ -1841,6 +1939,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "在范围内未检测到敌方地面目标。",
         selectTargetFromMenu = "从菜单中选择目标以标记它。",
         targetInfo = "目标 %d：%s %s %s，航向 %.0f，范围 %.1f %s",
+        -- Behavior hints
+        accelerating = "加速中",
+        decelerating = "减速中",
+        climbing = "爬升中",
+        descending = "下降中",
+        turning_left = "左转中",
+        turning_right = "右转中",
+        reversing = "反转中",
         -- State words
         enabled = "已启用",
         disabled = "已禁用",
@@ -2078,6 +2184,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "範囲内で敵地上目標が検知されませんでした。",
         selectTargetFromMenu = "それをマークするためにメニューから目標を選択してください。",
         targetInfo = "目標%d：%s %s %s、針路%.0f、範囲%.1f %s",
+        -- Behavior hints
+        accelerating = "加速中",
+        decelerating = "減速中",
+        climbing = "上昇中",
+        descending = "下降中",
+        turning_left = "左旋回中",
+        turning_right = "右旋回中",
+        reversing = "反転中",
         -- State words
         enabled = "有効",
         disabled = "無効",
@@ -2149,6 +2263,7 @@ PILOT_INTUITION_LANGUAGES = {
             czech = "Čeština (チェコ語)",
         }
     },
+    -- Czech language
     CZ = {
         -- Messages
         welcome = {
@@ -2314,6 +2429,14 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Žádné nepřátelské pozemní cíle detekovány v dosahu.",
         selectTargetFromMenu = "Vyberte cíl z menu pro jeho označení.",
         targetInfo = "Cíl %d: %s %s %s, Kurz %.0f, Dosah %.1f %s",
+        -- Behavior hints
+        accelerating = "zrychlující",
+        decelerating = "zpomalující",
+        climbing = "stoupající",
+        descending = "klesající",
+        turning_left = "otáčející se vlevo",
+        turning_right = "otáčející se vpravo",
+        reversing = "obracející",
         -- State words
         enabled = "povoleno",
         disabled = "zakázáno",
@@ -2671,7 +2794,7 @@ function PilotIntuition:ScanTargets()
                     previousWingmen = 0,  -- For formation change detection
                     frequencyMultiplier = 1.0,  -- Per-player alert frequency: 1.0=normal, 2.0=quiet, 0.5=verbose
                     threateningBandits = {},  -- Reusable table for detected threats
-                    lastMultipleBanditsWarningTime = 0,  -- Cooldown for "Multiple bandits in vicinity!" message
+                    lastBehaviorHintTime = 0,  -- Cooldown for behavior hints
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,  -- Player's distance unit preference
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,  -- Player's language preference
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
@@ -4745,6 +4868,10 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
             -- Explicitly nil out sub-fields before removing to help GC
             data.unit = nil
             data.banditName = nil
+            data.prevVelocity = nil
+            data.prevAltitude = nil
+            data.prevHeading = nil
+            data.prevTime = nil
             playerData.trackedAirTargets[id] = nil
         end
     end
@@ -4810,7 +4937,7 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                         
                         if not playerData.trackedAirTargets[targetID] then
                 local banditName = unit:GetPlayerName() or unit:GetName()
-                playerData.trackedAirTargets[targetID] = { unit = unit, engaged = false, lastRange = distance, lastTime = now, wasHot = false, lastRelativeBearing = relativeBearing, lastEngagedTime = 0, banditName = banditName }
+                playerData.trackedAirTargets[targetID] = { unit = unit, engaged = false, lastRange = distance, lastTime = now, wasHot = false, lastRelativeBearing = relativeBearing, lastEngagedTime = 0, banditName = banditName, prevVelocity = unit:GetVelocity(), prevAltitude = unit:GetAltitude(), prevHeading = unit:GetHeading(), prevTime = now }
                 
                 -- Safety: Limit tracked targets to prevent memory bloat in long missions (keep 50 most recent)
                 local trackedCount = 0
@@ -4977,6 +5104,43 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 end
                 
                 self:ProvideDogfightAssist(playerUnit, unit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing, effectiveCooldown)
+                
+                -- Delta-based behavior hints
+                local currentVelocity = unit:GetVelocity()
+                local currentAltitude = unit:GetAltitude()
+                local currentHeading = unit:GetHeading()
+                local currentTime = now
+                local prevVelocity = data.prevVelocity
+                local prevAltitude = data.prevAltitude
+                local prevHeading = data.prevHeading
+                local prevTime = data.prevTime
+                if prevTime and (currentTime - prevTime) > 0 then
+                    local timeDelta = currentTime - prevTime
+                    local velocityDelta = (currentVelocity:GetLength() - prevVelocity:GetLength()) / timeDelta
+                    local altitudeDelta = (currentAltitude - prevAltitude) / timeDelta
+                    local headingDelta = ((currentHeading - prevHeading + 180) % 360 - 180)
+                    if playerData.dogfightAssist and PILOT_INTUITION_CONFIG.enableBehaviorHints and (now - (playerData.lastBehaviorHintTime or 0)) > PILOT_INTUITION_CONFIG.behaviorHintCooldown then
+                        local hintKey = nil
+                        if math.abs(velocityDelta) > PILOT_INTUITION_CONFIG.velocityDeltaThreshold then
+                            hintKey = velocityDelta > 0 and "accelerating" or "decelerating"
+                        elseif math.abs(altitudeDelta) > PILOT_INTUITION_CONFIG.behaviorAltitudeDeltaThreshold then
+                            hintKey = altitudeDelta > 0 and "climbing" or "descending"
+                        elseif math.abs(headingDelta) > PILOT_INTUITION_CONFIG.headingDeltaThreshold then
+                            hintKey = headingDelta > 0 and "turning_right" or "turning_left"
+                        elseif math.abs(headingDelta) > 90 then
+                            hintKey = "reversing"
+                        end
+                        if hintKey then
+                            MESSAGE:New("Bandit " .. self:GetText(hintKey, playerKey) .. "!", 5):ToClient(client)
+                            playerData.lastBehaviorHintTime = now
+                        end
+                    end
+                end
+                -- Update prev values
+                data.prevVelocity = currentVelocity
+                data.prevAltitude = currentAltitude
+                data.prevHeading = currentHeading
+                data.prevTime = currentTime
             end
                     end  -- End if hasLOS
                 else
