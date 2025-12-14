@@ -37,7 +37,7 @@ Whether flying solo or in formation, players receive timely warnings about bandi
    - Copy `Moose_WWII_PilotIntuition.lua` to your DCS mission folder.
 
 2. **Include Moose Framework**:
-   - Download `Moose_Include_Static.lua` from [FlightControl's MOOSE](https://github.com/FlightControl-Master/MOOSE_INCLUDE/tree/develop/Moose_Include_Static) and include it in your mission folder.
+   - Download `Moose_.lua` from [FlightControl's MOOSE](https://github.com/FlightControl-Master/MOOSE_INCLUDE/tree/develop/Moose_Include_Static) and include it in your mission folder.
 
 3. **Add to Mission**:
    - Open your DCS mission in the Mission Editor.
