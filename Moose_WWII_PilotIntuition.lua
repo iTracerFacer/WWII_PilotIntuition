@@ -30,14 +30,14 @@
 
 --
 -- Setup Instructions:
--- 1. Ensure the Moose framework is installed and loaded in your DCS mission (download from https://flightcontrol-master.github.io/MOOSE_DOCS/).
+-- 1. Ensure the Moose framework is installed and loaded in your DCS mission (download from https://github.com/FlightControl-Master/MOOSE_INCLUDE/tree/develop/Moose_Include_Static).
 -- 2. Add this script to your mission via the DCS Mission Editor: Go to Triggers > Mission Start > Do Script File, and select this Lua file.
 -- 3. Optionally, customize the PILOT_INTUITION_CONFIG table below to adjust ranges, multipliers, and behaviors to fit your mission.
 -- 4. The system initializes automatically on mission start. Players will see a welcome message and can access settings via the F10 menu.
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 3
+PILOT_INTUITION_LOG_LEVEL = 1
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then

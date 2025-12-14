@@ -24,7 +24,7 @@ Installation
 
 Prerequisites
 - DCS World: Ensure you have DCS World installed and updated.
-- Moose Framework: Download and install the Moose framework from FlightControl's MOOSE Documentation (https://flightcontrol-master.github.io/MOOSE_DOCS/).
+- Moose Framework: Download and install the Moose framework from https://github.com/FlightControl-Master/MOOSE_INCLUDE/tree/develop/Moose_Include_Static.
 
 Steps
 1. Download the Script:
@@ -32,7 +32,7 @@ Steps
    - Copy Moose_WWII_PilotIntuition.lua to your DCS mission folder.
 
 2. Include Moose Framework:
-   - Ensure Moose_.lua is also in your mission folder (included in this repo).
+   - Download Moose_Include_Static.lua from https://github.com/FlightControl-Master/MOOSE_INCLUDE/tree/develop/Moose_Include_Static and include it in your mission folder.
 
 3. Add to Mission:
    - Open your DCS mission in the Mission Editor.
