@@ -37,7 +37,7 @@
 -- 5. For best results, test in a mission with active AI units or other players to verify detection ranges and messaging.
 
 -- Logging system (0=NONE, 1=ERROR, 2=INFO, 3=DEBUG, 4=TRACE)
-PILOT_INTUITION_LOG_LEVEL = 1
+PILOT_INTUITION_LOG_LEVEL = 3
 
 local function PILog(level, message)
     if level <= PILOT_INTUITION_LOG_LEVEL then
@@ -117,7 +117,8 @@ PILOT_INTUITION_CONFIG = {
     -- ========================================
     enableFriendlyWarnings = true,  -- Enable friendly fire warnings during dogfights
     friendlyWarningRange = 800,  -- Meters - range for friendly warnings
-    friendlyWarningAngle = 30,  -- Degrees - angle cone for nose-on warnings
+    friendlyWarningAngle = 30,  -- Degrees - angle cone for forward arc warnings
+    friendlyWarningAltitudeDelta = 100,  -- Meters - max altitude difference for warnings
     friendlyWarningCooldown = 10,  -- Seconds between friendly warning messages
 
     -- ========================================
@@ -333,6 +334,7 @@ PILOT_INTUITION_LANGUAGES = {
             "Friendly ahead—hold fire!",
             "Blue aircraft nose-on—check ID!",
             "Friendly contact in front—do not engage!",
+            "Allied aircraft ahead—careful! Unless it's Mo', then open fire!",
         },
         -- Behavior hints
         accelerating = "accelerating",
@@ -2578,9 +2580,6 @@ PILOT_INTUITION_LANGUAGES = {
     }
 }
 
--- Backward compatibility: keep old reference for any direct usage
-PILOT_INTUITION_MESSAGES = PILOT_INTUITION_LANGUAGES.EN
-
 -- Pilot Intuition Class
 PilotIntuition = {
     ClassName = "PilotIntuition",
@@ -2761,17 +2760,21 @@ function PilotIntuition:GetActivePlayers()
     -- Method 1: Try DCS coalition.getPlayers()
     for _, coalitionId in pairs({coalition.side.RED, coalition.side.BLUE, coalition.side.NEUTRAL}) do
         local success, coalPlayers = pcall(coalition.getPlayers, coalitionId)
+        PILog(LOG_TRACE, "PilotIntuition: coalition.getPlayers(" .. coalitionId .. ") success: " .. tostring(success) .. ", returned: " .. tostring(coalPlayers))
         if success and coalPlayers then
+            PILog(LOG_TRACE, "PilotIntuition: coalPlayers table size: " .. #coalPlayers)
             for _, playerId in pairs(coalPlayers) do
+                PILog(LOG_TRACE, "PilotIntuition: Checking playerId: " .. tostring(playerId))
                 if playerId and type(playerId) == "string" and playerId ~= "" then
                     local success2, unit = pcall(Unit.getByName, playerId)
+                    PILog(LOG_TRACE, "PilotIntuition: Unit.getByName(" .. playerId .. ") success: " .. tostring(success2) .. ", unit exists: " .. tostring(unit and unit:isExist()) .. ", active: " .. tostring(unit and unit:isActive()))
                     if success2 and unit and unit:isExist() and unit:isActive() then
                         local unitWrapper = UNIT:Find(unit)
                         if unitWrapper then
                             local playerName = unitWrapper:GetPlayerName() or unitWrapper:GetName()
                             players[playerName] = unitWrapper
                             count = count + 1
-                            env.info("PilotIntuition: Found player via coalition.getPlayers: " .. playerName)
+                            PILog(LOG_INFO, "PilotIntuition: Found player via coalition.getPlayers: " .. playerName)
                         end
                     end
                 end
@@ -2804,6 +2807,23 @@ function PilotIntuition:GetActivePlayers()
         PILog(LOG_DEBUG, "PilotIntuition: _DATABASE.CLIENTS had " .. clientCount .. " total entries")
     else
         PILog(LOG_ERROR, "PilotIntuition: _DATABASE.CLIENTS not available!")
+    end
+    
+    -- Method 3: Fallback - scan all units for player names (for single-player or edge cases)
+    if _DATABASE and _DATABASE.UNITS then
+        for unitName, unitObj in pairs(_DATABASE.UNITS) do
+            if unitObj and unitObj:IsAlive() and not players[unitName] then
+                local playerName = unitObj:GetPlayerName()
+                if playerName and playerName ~= "" then
+                    local unitWrapper = UNIT:Find(unitObj)
+                    if unitWrapper then
+                        players[playerName] = unitWrapper
+                        count = count + 1
+                        PILog(LOG_INFO, "PilotIntuition: Found player via _DATABASE.UNITS fallback: " .. playerName)
+                    end
+                end
+            end
+        end
     end
     
     PILog(LOG_INFO, "PilotIntuition: GetActivePlayers found " .. count .. " players")
@@ -3363,8 +3383,7 @@ function PilotIntuition:BuildGroupMenus(group)
     end
     
     -- Illumination submenu with dynamic count display
-    local playerName = unit:GetPlayerName() or unit:GetName()
-    local flareCount = (self.players[playerName] and self.players[playerName].illuminationFlares) or PILOT_INTUITION_CONFIG.illuminationFlaresDefault
+    local flareCount = (self.players[playerKey] and self.players[playerKey].illuminationFlares) or PILOT_INTUITION_CONFIG.illuminationFlaresDefault
     local illuLabel = string.format(self:GetText("menu.illumination", playerKey), flareCount)
     local illuMenu = MENU_GROUP:New(group, illuLabel, playerSubMenu)
     MENU_GROUP_COMMAND:New(group, self:GetText("menu.dropAtMyPosition", playerKey), illuMenu, function() 
@@ -4055,11 +4074,12 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
         return 
     end
     
+    local client = playerUnit:GetClient()
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
     local playerKey = self:GetPlayerDataKey(playerUnit)
     
     -- If no player data found, try to initialize it
     if not playerKey or not self.players[playerKey] then
-        local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
         env.info("PilotIntuition: No player data found, initializing for: " .. tostring(playerName))
         self:InitializePlayer(playerUnit, playerName)
         playerKey = self:GetPlayerDataKey(playerUnit)
@@ -5130,8 +5150,9 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                     threatType = "overshot"
                 else
                     -- Generic aspect-based description for distant contacts
-                    local clockPos = math.floor((relativeBearing + 15) / 30) + 1
-                    if clockPos > 12 then clockPos = clockPos - 12 end
+                    local clockPos = math.floor((relativeBearing / 30) + 0.5)
+                    clockPos = clockPos % 12
+                    if clockPos == 0 then clockPos = 12 end
                     threatType = threatLevel
                     local distValue, distUnit = self:FormatDistance(distance, playerKey)
                     threatDetail = string.format("%d o'clock, %.1f%s", clockPos, distValue, distUnit)
@@ -5183,25 +5204,26 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 local prevAltitude = data.prevAltitude
                 local prevHeading = data.prevHeading
                 local prevTime = data.prevTime
-                if prevTime and (currentTime - prevTime) > 0 then
+                if prevTime and (currentTime - prevTime) > 0 and currentVelocity and prevVelocity then
                     local timeDelta = currentTime - prevTime
                     local velocityDelta = (currentVelocity:GetLength() - prevVelocity:GetLength()) / timeDelta
                     local altitudeDelta = (currentAltitude - prevAltitude) / timeDelta
                     local headingDelta = ((currentHeading - prevHeading + 180) % 360 - 180)
-                    if playerData.dogfightAssist and PILOT_INTUITION_CONFIG.enableBehaviorHints and (now - (playerData.lastBehaviorHintTime or 0)) > PILOT_INTUITION_CONFIG.behaviorHintCooldown then
-                        local hintKey = nil
-                        if math.abs(velocityDelta) > PILOT_INTUITION_CONFIG.velocityDeltaThreshold then
-                            hintKey = velocityDelta > 0 and "accelerating" or "decelerating"
-                        elseif math.abs(altitudeDelta) > PILOT_INTUITION_CONFIG.behaviorAltitudeDeltaThreshold then
-                            hintKey = altitudeDelta > 0 and "climbing" or "descending"
-                        elseif math.abs(headingDelta) > PILOT_INTUITION_CONFIG.headingDeltaThreshold then
-                            hintKey = headingDelta > 0 and "turning_right" or "turning_left"
-                        elseif math.abs(headingDelta) > 90 then
-                            hintKey = "reversing"
-                        end
-                        if hintKey then
-                            MESSAGE:New("Bandit " .. self:GetText(hintKey, playerKey) .. "!", 5):ToClient(client)
-                            playerData.lastBehaviorHintTime = now
+                        if playerData.dogfightAssist and PILOT_INTUITION_CONFIG.enableBehaviorHints and (now - (playerData.lastBehaviorHintTime or 0)) > PILOT_INTUITION_CONFIG.behaviorHintCooldown then
+                            local hintKey = nil
+                            if math.abs(velocityDelta) > PILOT_INTUITION_CONFIG.velocityDeltaThreshold then
+                                hintKey = velocityDelta > 0 and "accelerating" or "decelerating"
+                            elseif math.abs(altitudeDelta) > PILOT_INTUITION_CONFIG.behaviorAltitudeDeltaThreshold then
+                                hintKey = altitudeDelta > 0 and "climbing" or "descending"
+                            elseif math.abs(headingDelta) > PILOT_INTUITION_CONFIG.headingDeltaThreshold then
+                                hintKey = headingDelta > 0 and "turning_right" or "turning_left"
+                            elseif math.abs(headingDelta) > 90 then
+                                hintKey = "reversing"
+                            end
+                            if hintKey then
+                                MESSAGE:New("Bandit " .. self:GetText(hintKey, playerKey) .. "!", 5):ToClient(client)
+                                playerData.lastBehaviorHintTime = now
+                            end
                         end
                     end
                 end
@@ -5210,12 +5232,11 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                 data.prevAltitude = currentAltitude
                 data.prevHeading = currentHeading
                 data.prevTime = currentTime
-            end
-                    end  -- End if hasLOS
-                else
+
                     PILog(LOG_TRACE, string.format("PilotIntuition: Unit %s out of range: %.0fm > %.0fm", 
                         unit:GetName(), distance, detectionRange))
-                end  -- End if distance <= detectionRange
+                end
+                end  -- End if distance <= detectionRange <= detectionRange <= detectionRange
             end  -- End if unitCoord
         end  -- End if unit and unit:IsAlive()
     end  -- End for _, unit in ipairs(enemyAirUnits)
@@ -5350,18 +5371,21 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
                     table.insert(friendlyAirUnits, unitObj)
                 end
             end
-            -- Check for nose-on friendlies within range
+            -- Check for friendlies in forward arc within range (any aspect, to prevent crossing paths)
             for _, unit in ipairs(friendlyAirUnits) do
                 local unitCoord = unit:GetCoordinate()
                 if unitCoord then
                     local distance = playerPos:Get2DDistance(unitCoord)
-                    if distance <= PILOT_INTUITION_CONFIG.friendlyWarningRange then
-                        -- Check if nose-on
+                    local playerAlt = playerUnit:GetAltitude()
+                    local friendlyAlt = unit:GetAltitude()
+                    if distance <= PILOT_INTUITION_CONFIG.friendlyWarningRange and math.abs(playerAlt - friendlyAlt) <= PILOT_INTUITION_CONFIG.friendlyWarningAltitudeDelta then
+                        -- Calculate relative bearing
                         local bearing = playerPos:HeadingTo(unitCoord)
                         local playerHeading = playerUnit:GetHeading()
                         local relativeBearing = (bearing - playerHeading + 360) % 360
+                        -- Check if friendly is in forward arc (ahead)
                         if relativeBearing <= PILOT_INTUITION_CONFIG.friendlyWarningAngle / 2 or relativeBearing >= 360 - PILOT_INTUITION_CONFIG.friendlyWarningAngle / 2 then
-                            -- Nose-on friendly, send warning if cooldown passed
+                            -- Friendly in front at similar altitude, send warning if cooldown passed
                             local now = timer.getTime()
                             if (now - (playerData.lastFriendlyWarningTime or 0)) >= PILOT_INTUITION_CONFIG.friendlyWarningCooldown then
                                 if PILOT_INTUITION_CONFIG.activeMessaging then
@@ -5680,8 +5704,9 @@ function PilotIntuition:ProvideDogfightAssist(playerUnit, banditUnit, distance, 
     if playerData.lastPrimaryTargetBearing then
         local bearingChange = math.abs(relativeBearing - playerData.lastPrimaryTargetBearing)
         if bearingChange > PILOT_INTUITION_CONFIG.positionChangeThreshold and bearingChange < (360 - PILOT_INTUITION_CONFIG.positionChangeThreshold) then
-            local clockPos = math.floor(relativeBearing / 30) + 1
-            if clockPos > 12 then clockPos = clockPos - 12 end
+            local clockPos = math.floor((relativeBearing / 30) + 0.5)
+            clockPos = clockPos % 12
+            if clockPos == 0 then clockPos = 12 end
             MESSAGE:New("Bandit moving to " .. clockPos .. " o'clock!", 10):ToClient(client)
             playerData.lastDogfightAssistTime = now
             playerData.lastPrimaryTargetBearing = relativeBearing
@@ -5691,8 +5716,9 @@ function PilotIntuition:ProvideDogfightAssist(playerUnit, banditUnit, distance, 
     
     -- Altitude advantage/disadvantage (lower priority - only if no other callouts triggered)
     if math.abs(altDelta) > PILOT_INTUITION_CONFIG.altitudeDeltaThreshold then
-        local clockPos = math.floor(relativeBearing / 30) + 1
-        if clockPos > 12 then clockPos = clockPos - 12 end
+        local clockPos = math.floor((relativeBearing / 30) + 0.5)
+        clockPos = clockPos % 12
+        if clockPos == 0 then clockPos = 12 end
         local distKM = math.floor(distance / 1000 * 10) / 10
         
         if altDelta > 0 then
