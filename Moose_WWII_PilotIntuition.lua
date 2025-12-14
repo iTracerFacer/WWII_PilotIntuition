@@ -113,6 +113,14 @@ PILOT_INTUITION_CONFIG = {
     positionChangeThreshold = 45,  -- Degrees - trigger update if bandit moves this much
 
     -- ========================================
+    -- FRIENDLY FIRE WARNINGS SETTINGS
+    -- ========================================
+    enableFriendlyWarnings = true,  -- Enable friendly fire warnings during dogfights
+    friendlyWarningRange = 800,  -- Meters - range for friendly warnings
+    friendlyWarningAngle = 30,  -- Degrees - angle cone for nose-on warnings
+    friendlyWarningCooldown = 10,  -- Seconds between friendly warning messages
+
+    -- ========================================
     -- BEHAVIOR HINTS SETTINGS
     -- ========================================
     enableBehaviorHints = true,  -- Enable delta-based behavior hints
@@ -320,6 +328,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "No enemy ground targets detected in range.",
         selectTargetFromMenu = "Select a target from the menu to mark it.",
         targetInfo = "Target %d: %s %s %s, Bearing %.0f, Range %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Friendly ahead—hold fire!",
+            "Blue aircraft nose-on—check ID!",
+            "Friendly contact in front—do not engage!",
+        },
         -- Behavior hints
         accelerating = "accelerating",
         decelerating = "decelerating",
@@ -543,6 +557,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Keine feindlichen Bodenziele in Reichweite erkannt.",
         selectTargetFromMenu = "Wählen Sie ein Ziel aus dem Menü zum Markieren.",
         targetInfo = "Ziel %d: %s %s %s, Peilung %.0f, Reichweite %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Freundlich voraus—Feuer halten!",
+            "Blaues Flugzeug frontal—ID prüfen!",
+            "Freundlicher Kontakt vorn—nicht angreifen!",
+        },
         -- Behavior hints
         accelerating = "beschleunigend",
         decelerating = "verzögernd",
@@ -764,6 +784,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Aucune cible terrestre ennemie détectée à portée.",
         selectTargetFromMenu = "Sélectionnez une cible dans le menu pour la marquer.",
         targetInfo = "Cible %d: %s %s %s, Relèvement %.0f, Portée %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Ami devant—ne tirez pas!",
+            "Avion bleu de face—vérifiez l'ID!",
+            "Contact ami devant—ne pas engager!",
+        },
         -- Behavior hints
         accelerating = "accélérant",
         decelerating = "décélérant",
@@ -985,6 +1011,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "No se detectaron objetivos terrestres enemigos en rango.",
         selectTargetFromMenu = "Selecciona un objetivo del menú para marcarlo.",
         targetInfo = "Objetivo %d: %s %s %s, Rumbo %.0f, Rango %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "¡Amigo adelante—detén el fuego!",
+            "¡Avión azul de frente—verifica ID!",
+            "¡Contacto amigo al frente—no engages!",
+        },
         -- Behavior hints
         accelerating = "acelerando",
         decelerating = "desacelerando",
@@ -1206,6 +1238,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Вражеские наземные цели в радиусе не обнаружены.",
         selectTargetFromMenu = "Выберите цель из меню, чтобы отметить её.",
         targetInfo = "Цель %d: %s %s %s, Пеленг %.0f, Дальность %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Друг впереди—не стреляй!",
+            "Синий самолет спереди—проверь ID!",
+            "Дружественный контакт спереди—не атакуй!",
+        },
         -- Behavior hints
         accelerating = "ускоряясь",
         decelerating = "замедляясь",
@@ -1449,6 +1487,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Brak wykrytych wrogich celów naziemnych w zasięgu.",
         selectTargetFromMenu = "Wybierz cel z menu, aby go oznaczyć.",
         targetInfo = "Cel %d: %s %s %s, Kurs %.0f, Zasięg %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Przyjaciel na wprost—nie strzelaj!",
+            "Niebieski samolot z przodu—sprawdź ID!",
+            "Kontakt przyjacielski z przodu—nie atakuj!",
+        },
         -- Behavior hints
         accelerating = "przyspieszający",
         decelerating = "zwalniający",
@@ -1694,6 +1738,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Nenhum alvo terrestre inimigo detectado no alcance.",
         selectTargetFromMenu = "Selecione um alvo do menu para marcá-lo.",
         targetInfo = "Alvo %d: %s %s %s, Rumo %.0f, Alcance %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Amigo à frente—não dispare!",
+            "Avião azul de frente—verifique ID!",
+            "Contato amigo à frente—não engajar!",
+        },
         -- Behavior hints
         accelerating = "acelerando",
         decelerating = "desacelerando",
@@ -1939,6 +1989,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "在范围内未检测到敌方地面目标。",
         selectTargetFromMenu = "从菜单中选择目标以标记它。",
         targetInfo = "目标 %d：%s %s %s，航向 %.0f，范围 %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "前方友军—停止射击！",
+            "前方蓝色飞机—检查ID！",
+            "前方友军接触—不要开火！",
+        },
         -- Behavior hints
         accelerating = "加速中",
         decelerating = "减速中",
@@ -2184,6 +2240,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "範囲内で敵地上目標が検知されませんでした。",
         selectTargetFromMenu = "それをマークするためにメニューから目標を選択してください。",
         targetInfo = "目標%d：%s %s %s、針路%.0f、範囲%.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "前方に味方—射撃を止めて！",
+            "前方に青い航空機—IDを確認！",
+            "前方に味方接触—攻撃しない！",
+        },
         -- Behavior hints
         accelerating = "加速中",
         decelerating = "減速中",
@@ -2429,6 +2491,12 @@ PILOT_INTUITION_LANGUAGES = {
         noGroundTargets = "Žádné nepřátelské pozemní cíle detekovány v dosahu.",
         selectTargetFromMenu = "Vyberte cíl z menu pro jeho označení.",
         targetInfo = "Cíl %d: %s %s %s, Kurz %.0f, Dosah %.1f %s",
+        -- Friendly warnings
+        friendlyWarning = {
+            "Přítel vpředu—nezastřel!",
+            "Modré letadlo čelně—zkontroluj ID!",
+            "Přátelský kontakt vpředu—nezapojuj!",
+        },
         -- Behavior hints
         accelerating = "zrychlující",
         decelerating = "zpomalující",
@@ -2801,6 +2869,7 @@ function PilotIntuition:ScanTargets()
                     lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
                     lastGroundScanningDisabledReason = nil,  -- Track last reason ground scanning was disabled
                     lastGroundScanningEnabledTime = 0,  -- Track when ground scanning was last enabled
+                    lastFriendlyWarningTime = 0,  -- Cooldown for friendly warnings
                 }
             else
                 -- Update last seen time for existing players
@@ -5262,6 +5331,48 @@ function PilotIntuition:ScanAirTargetsForPlayer(playerUnit, playerData, client, 
         if (now - (playerData.lastMultipleBanditsWarningTime or 0)) >= PILOT_INTUITION_CONFIG.multipleBanditsWarningCooldown then
             self:ReportDogfight(nil, playerPos, playerData, client, "Multiple bandits in vicinity!")
             playerData.lastMultipleBanditsWarningTime = now
+        end
+    end
+
+    -- Friendly fire warnings during dogfight
+    if PILOT_INTUITION_CONFIG.enableFriendlyWarnings then
+        local engagedBandits = 0
+        for _, targetData in pairs(playerData.trackedAirTargets) do
+            if targetData.engaged then
+                engagedBandits = engagedBandits + 1
+            end
+        end
+        if engagedBandits > 0 then
+            -- Get friendly air units
+            local friendlyAirUnits = {}
+            for unitName, unitObj in pairs(_DATABASE.UNITS) do
+                if unitObj and unitObj:IsAlive() and unitObj:IsAir() and unitObj:GetCoalition() == playerCoalition and unitObj:GetName() ~= playerUnit:GetName() then
+                    table.insert(friendlyAirUnits, unitObj)
+                end
+            end
+            -- Check for nose-on friendlies within range
+            for _, unit in ipairs(friendlyAirUnits) do
+                local unitCoord = unit:GetCoordinate()
+                if unitCoord then
+                    local distance = playerPos:Get2DDistance(unitCoord)
+                    if distance <= PILOT_INTUITION_CONFIG.friendlyWarningRange then
+                        -- Check if nose-on
+                        local bearing = playerPos:HeadingTo(unitCoord)
+                        local playerHeading = playerUnit:GetHeading()
+                        local relativeBearing = (bearing - playerHeading + 360) % 360
+                        if relativeBearing <= PILOT_INTUITION_CONFIG.friendlyWarningAngle / 2 or relativeBearing >= 360 - PILOT_INTUITION_CONFIG.friendlyWarningAngle / 2 then
+                            -- Nose-on friendly, send warning if cooldown passed
+                            local now = timer.getTime()
+                            if (now - (playerData.lastFriendlyWarningTime or 0)) >= PILOT_INTUITION_CONFIG.friendlyWarningCooldown then
+                                if PILOT_INTUITION_CONFIG.activeMessaging then
+                                    MESSAGE:New(self:GetRandomMessage("friendlyWarning"), 10):ToClient(client)
+                                end
+                                playerData.lastFriendlyWarningTime = now
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 end
