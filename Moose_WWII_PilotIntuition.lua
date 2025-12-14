@@ -97,7 +97,10 @@ PILOT_INTUITION_CONFIG = {
     headOnWarningRange = 150,  -- Meters for head-on warning
     closeFlyingMessageCooldown = 26,  -- Seconds between close flying messages
     enableAirScanning = true,  -- Enable scanning for air targets
-    enableGroundScanning = false,  -- Enable scanning for ground targets
+    enableGroundScanning = false,  -- Enable scanning for ground targets (off by default to reduce message spam)
+    disableGroundScanningInDogfight = true,  -- Disable ground scanning when engaged in dogfight with bandits
+    disableGroundScanningAfterMarking = true,  -- Disable ground scanning permanently after marking a ground target (requires manual re-enable)
+    groundScanningDisableAfterMissionTime = 180,  -- Seconds after mission start to disable ground scanning (0 = never disable)
     illuminationCooldown = 30,  -- Seconds between illumination flare drops (simulates reload time)
     illuminationAltitude = 500,  -- Meters - altitude offset above target for illumination flares
     illuminationFlaresDefault = 3,  -- Number of illumination flares per sortie
@@ -2492,6 +2495,7 @@ function PilotIntuition:ScanTargets()
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,  -- Player's distance unit preference
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,  -- Player's language preference
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
+                    lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
                 }
             else
                 -- Update last seen time for existing players
@@ -2639,7 +2643,7 @@ function PilotIntuition:ScanTargets()
             if playerData.enableAirScanning then
                 self:ScanAirTargetsForPlayer(unit, playerData, client, activeClients, enemyAirByCoalition[enemyCoal])
             end
-            if playerData.enableGroundScanning then
+            if playerData.enableGroundScanning and self:ShouldScanGroundTargets(playerData) then
                 self:ScanGroundTargetsForPlayer(unit, client, activeClients, enemyGroundByCoalition[enemyCoal])
             end
             self:CheckCloseFlyingForPlayer(unit, playerData, client, activeClients)
@@ -3452,6 +3456,7 @@ function PilotIntuition:SetupPlayerMenus()
                     distanceUnit = PILOT_INTUITION_CONFIG.distanceUnit,
                     language = PILOT_INTUITION_CONFIG.defaultLanguage,
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
+                    lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
                 }
             else
                 -- Update last seen time for existing players
@@ -3676,6 +3681,10 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
     
     if playerKey and self.players[playerKey] then
         self.players[playerKey].enableGroundScanning = onoff
+        if onoff then
+            -- Reset the marked time when re-enabling so it can be disabled again
+            self.players[playerKey].lastGroundTargetMarkedTime = 0
+        end
         local status = onoff and "enabled" or "disabled"
         local client = playerUnit:GetClient()
         if client then
@@ -5050,6 +5059,12 @@ function PilotIntuition:ReportGroundTarget(group, playerUnit, client, placeMarke
     MESSAGE:New(self:GetRandomMessage("groundTargetDetected", {category, sizeDesc, unitType, bearing, distance, unit}), 10):ToClient(client)
     self.lastMessageTime = now
 
+    -- Update last marked time for the player
+    local playerName = playerUnit:GetPlayerName() or playerUnit:GetName()
+    if self.players[playerName] then
+        self.players[playerName].lastGroundTargetMarkedTime = now
+    end
+
     -- Place marker if requested
     if placeMarker then
         -- Determine marker type: prefer player preference if set, otherwise global config
@@ -5104,6 +5119,35 @@ function PilotIntuition:ClassifyGroundUnit(unitType)
     else
         return "Ground"
     end
+end
+
+function PilotIntuition:ShouldScanGroundTargets(playerData)
+    local now = timer.getTime()
+    
+    -- Check if in dogfight
+    if PILOT_INTUITION_CONFIG.disableGroundScanningInDogfight then
+        for _, targetData in pairs(playerData.trackedAirTargets) do
+            if targetData.engaged then
+                return false
+            end
+        end
+    end
+    
+    -- Check if recently marked a ground target
+    if PILOT_INTUITION_CONFIG.disableGroundScanningAfterMarking then
+        if playerData.lastGroundTargetMarkedTime > 0 then
+            return false
+        end
+    end
+    
+    -- Check mission time
+    if PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime > 0 then
+        if now > PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime then
+            return false
+        end
+    end
+    
+    return true
 end
 
 function PilotIntuition:ProvideDogfightAssist(playerUnit, banditUnit, distance, relativeBearing, lastRelativeBearing, playerData, client, closing, effectiveCooldown)
