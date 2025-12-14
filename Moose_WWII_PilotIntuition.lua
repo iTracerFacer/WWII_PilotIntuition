@@ -100,7 +100,7 @@ PILOT_INTUITION_CONFIG = {
     enableGroundScanning = false,  -- Enable scanning for ground targets (off by default to reduce message spam)
     disableGroundScanningInDogfight = true,  -- Disable ground scanning when engaged in dogfight with bandits
     disableGroundScanningAfterMarking = true,  -- Disable ground scanning permanently after marking a ground target (requires manual re-enable)
-    groundScanningDisableAfterMissionTime = 180,  -- Seconds after mission start to disable ground scanning (0 = never disable)
+    groundScanningDisableAfterMissionTime = 180,  -- Seconds after enabling ground scanning to disable it (0 = never disable)
     illuminationCooldown = 30,  -- Seconds between illumination flare drops (simulates reload time)
     illuminationAltitude = 500,  -- Meters - altitude offset above target for illumination flares
     illuminationFlaresDefault = 3,  -- Number of illumination flares per sortie
@@ -228,6 +228,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Ground scanning %s.",
             "Ground detection %s.",
+        },
+        groundScanningEnabledTimed = {
+            "Ground scanning enabled for %d minutes.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Ground scanning enabled indefinitely. Disable manually when needed.",
         },
         groundScanningDisabledDogfight = {
             "Ground scanning disabled - engaged in dogfight.",
@@ -439,6 +445,12 @@ PILOT_INTUITION_LANGUAGES = {
             "Bodenscan %s.",
             "Bodenerkennung %s.",
         },
+        groundScanningEnabledTimed = {
+            "Bodenscan für %d Minuten aktiviert.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Bodenscan auf unbestimmte Zeit aktiviert. Bei Bedarf manuell deaktivieren.",
+        },
         groundScanningDisabledDogfight = {
             "Bodenscan deaktiviert - im Luftkampf engagiert.",
             "Bodenerkennung aus - Banditen bekämpfen.",
@@ -645,6 +657,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Scan au sol %s.",
             "Détection au sol %s.",
+        },
+        groundScanningEnabledTimed = {
+            "Scan au sol activé pour %d minutes.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Scan au sol activé indéfiniment. Désactiver manuellement si nécessaire.",
         },
         groundScanningDisabledDogfight = {
             "Scan au sol désactivé - engagé dans un combat aérien.",
@@ -853,6 +871,12 @@ PILOT_INTUITION_LANGUAGES = {
             "Escaneo terrestre %s.",
             "Detección terrestre %s.",
         },
+        groundScanningEnabledTimed = {
+            "Escaneo terrestre activado por %d minutos.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Escaneo terrestre activado indefinidamente. Desactiva manualmente cuando sea necesario.",
+        },
         groundScanningDisabledDogfight = {
             "Escaneo terrestre desactivado - comprometido en combate aéreo.",
             "Detección terrestre apagada - luchando contra bandidos.",
@@ -1059,6 +1083,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Наземное сканирование %s.",
             "Наземное обнаружение %s.",
+        },
+        groundScanningEnabledTimed = {
+            "Наземное сканирование включено на %d минут.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Наземное сканирование включено на неопределенный срок. Отключите вручную при необходимости.",
         },
         groundScanningDisabledDogfight = {
             "Наземное сканирование отключено - участвует в воздушном бою.",
@@ -1287,6 +1317,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Skanowanie naziemne %s.",
             "Wykrywanie naziemne %s.",
+        },
+        groundScanningEnabledTimed = {
+            "Skanowanie naziemne włączone na %d minut.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Skanowanie naziemne włączone na czas nieokreślony. Wyłącz ręcznie w razie potrzeby.",
         },
         groundScanningDisabledDogfight = {
             "Skanowanie naziemne wyłączone - zaangażowany w walkę powietrzną.",
@@ -1519,6 +1555,12 @@ PILOT_INTUITION_LANGUAGES = {
             "Varredura terrestre %s.",
             "Detecção terrestre %s.",
         },
+        groundScanningEnabledTimed = {
+            "Varredura terrestre ativada por %d minutos.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Varredura terrestre ativada indefinidamente. Desative manualmente quando necessário.",
+        },
         groundScanningDisabledDogfight = {
             "Varredura terrestre desativada - engajado em combate aéreo.",
             "Detecção terrestre desligada - lutando contra bandidos.",
@@ -1749,6 +1791,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "地面扫描 %s。",
             "地面检测 %s。",
+        },
+        groundScanningEnabledTimed = {
+            "地面扫描启用 %d 分钟。",
+        },
+        groundScanningEnabledIndefinite = {
+            "地面扫描无限期启用。如需关闭，请手动关闭。",
         },
         groundScanningDisabledDogfight = {
             "地面扫描已禁用 - 参与空战。",
@@ -1981,6 +2029,12 @@ PILOT_INTUITION_LANGUAGES = {
             "地上スキャン%s。",
             "地上検知%s。",
         },
+        groundScanningEnabledTimed = {
+            "地上スキャン%d分間有効。",
+        },
+        groundScanningEnabledIndefinite = {
+            "地上スキャン無期限で有効。必要に応じて手動で無効化してください。",
+        },
         groundScanningDisabledDogfight = {
             "地上スキャン無効 - 空中戦に参加中。",
             "地上検知オフ - 強盗と戦闘中。",
@@ -2210,6 +2264,12 @@ PILOT_INTUITION_LANGUAGES = {
         groundScanningToggle = {
             "Pozemní skenování %s.",
             "Pozemní detekce %s.",
+        },
+        groundScanningEnabledTimed = {
+            "Pozemní skenování povoleno na %d minut.",
+        },
+        groundScanningEnabledIndefinite = {
+            "Pozemní skenování povoleno na neurčito. Vypněte ručně podle potřeby.",
         },
         groundScanningDisabledDogfight = {
             "Pozemní skenování zakázáno - zapojen do vzdušného boje.",
@@ -2617,6 +2677,7 @@ function PilotIntuition:ScanTargets()
                     lastSeenTime = timer.getTime(),  -- Track last time player was seen active
                     lastGroundTargetMarkedTime = 0,  -- Track when ground target was last marked
                     lastGroundScanningDisabledReason = nil,  -- Track last reason ground scanning was disabled
+                    lastGroundScanningEnabledTime = 0,  -- Track when ground scanning was last enabled
                 }
             else
                 -- Update last seen time for existing players
@@ -3817,10 +3878,19 @@ function PilotIntuition:MenuSetPlayerGroundScanning(playerUnit, onoff)
         if onoff then
             -- Reset the marked time when re-enabling so it can be disabled again
             self.players[playerKey].lastGroundTargetMarkedTime = 0
+            -- Set the time when ground scanning was enabled
+            self.players[playerKey].lastGroundScanningEnabledTime = timer.getTime()
         end
-        local status = onoff and "enabled" or "disabled"
-        local client = playerUnit:GetClient()
-        if client then
+        if onoff then
+            local timeLimit = PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime
+            if timeLimit > 0 then
+                local minutes = math.ceil(timeLimit / 60)
+                MESSAGE:New(self:GetRandomMessage("groundScanningEnabledTimed", {minutes}, playerName), 10):ToClient(client)
+            else
+                MESSAGE:New(self:GetRandomMessage("groundScanningEnabledIndefinite", {}, playerName), 10):ToClient(client)
+            end
+        else
+            local status = "disabled"
             MESSAGE:New(self:GetRandomMessage("groundScanningToggle", {status}, playerName), 10):ToClient(client)
         end
     end
@@ -5273,10 +5343,12 @@ function PilotIntuition:ShouldScanGroundTargets(playerData)
         end
     end
     
-    -- Check mission time
+    -- Check time since ground scanning was enabled
     if PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime > 0 then
-        if now > PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime then
-            return "time"
+        if playerData.lastGroundScanningEnabledTime and playerData.lastGroundScanningEnabledTime > 0 then
+            if now - playerData.lastGroundScanningEnabledTime > PILOT_INTUITION_CONFIG.groundScanningDisableAfterMissionTime then
+                return "time"
+            end
         end
     end
     
