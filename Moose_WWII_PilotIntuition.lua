@@ -3743,6 +3743,7 @@ function PilotIntuition:WireEventHandlers()
     function handler:OnEventPlayerLeaveUnit(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
+        if not unit then return end
         
         -- Get player name before they leave
         local playerName = unit:GetPlayerName()
@@ -3763,6 +3764,7 @@ function PilotIntuition:WireEventHandlers()
     function handler:OnEventEjection(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
+        if not unit then return end
         
         local playerName = unit:GetPlayerName()
         if not playerName then return end
@@ -3775,6 +3777,7 @@ function PilotIntuition:WireEventHandlers()
     function handler:OnEventCrash(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
+        if not unit then return end
         
         local playerName = unit:GetPlayerName()
         if not playerName then return end
@@ -3786,6 +3789,7 @@ function PilotIntuition:WireEventHandlers()
     function handler:OnEventDead(EventData)
         if not EventData or not EventData.IniUnit then return end
         local unit = EventData.IniUnit
+        if not unit then return end
         
         local playerName = unit:GetPlayerName()
         if not playerName then return end
